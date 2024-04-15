@@ -27,7 +27,7 @@ max_cache_size = 10  # 최대 캐시할 모델 개수
 
 # 프로메테우스 지표 정의
 model_cache_usage = Gauge('model_cache_usage', 'Number of models currently cached')
-errors_count = Counter('errors', 'Number of errors')
+errors_count = Counter('errors', 'Number of errors', ['type'])
 predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
 
 def load_model_to_cache(model_hash):
