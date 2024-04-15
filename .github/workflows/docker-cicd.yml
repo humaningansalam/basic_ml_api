@@ -21,12 +21,12 @@ jobs:
       run: docker build -t myapp -f Dockerfile .
 
     - name: Run Docker container
-      run: docker run -d -p 5000:5000 -e SERVICE_TYPE=server myapp
+      run: docker run -d -p 5000:5000 myapp
 
     - name: Test
       run: |
         sleep 60
-        curl http://localhost:5000
+        curl http://localhost:5000/health
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
