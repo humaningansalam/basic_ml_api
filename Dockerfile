@@ -5,7 +5,10 @@ WORKDIR /usr/src/app
 
 COPY . .
 
-RUN python3 -m pip install  --upgrade pip \
+RUN apt-get update && apt-get install -y pkg-config libhdf5-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    &&python3 -m pip install  --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt 
 
 WORKDIR ./myapp
