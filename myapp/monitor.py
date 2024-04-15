@@ -2,7 +2,7 @@
 from prometheus_client import Gauge
 import threading
 import psutil
-import datetime
+import logging
 import os
 
 
@@ -28,13 +28,13 @@ class ResourceMonitor:
             cpu_usage = self.process.cpu_percent(interval=1)
             ram_usage = self.process.memory_info().rss
 
-            print(cpu_usage)
-            print(ram_usage)
+            logging.debug(cpu_usage)
+            logging.debug(ram_usage)
             self.cpu_usage_samples.append(cpu_usage)
             self.ram_usage_samples.append(ram_usage)
 
     def report(self):
-        print("start report")
+        logging.debug("start report")
         if self.cpu_usage_samples:  # CPU 사용량 샘플이 있을 경우에만 평균 계산
             avg_cpu_usage = sum(self.cpu_usage_samples) / len(self.cpu_usage_samples)
         else:
@@ -55,7 +55,6 @@ class ResourceMonitor:
 
     def sample_and_report(self):
         if not self.monitoring:
-            print("nononono")
             return  
 
         self.report()  # 리소스 사용량을 보고
@@ -65,10 +64,10 @@ class ResourceMonitor:
 
     def start_monitor(self):
         try:
-            print("start_monitor")
+            logging.debug("start_monitor")
             self.sample_and_report()  # 모니터링 시작
         except Exception as e:
-            print(f'error: {e}')
+            logging.error(f'error: {e}')
 
     def stop_monitor(self):
         self.monitoring = False
