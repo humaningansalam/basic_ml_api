@@ -221,32 +221,12 @@ def sched_del_oldmodel():
     threading.Timer(tool_util.delay_h(5), sched_del_oldmodel).start()
 
     del_oldmodel()
-
-def set_logging(log_level):
-    """
-    setting logging
-    """
-    # 로그 생성
-    logger = logging.getLogger()
-    # 로그 레벨 문자열을 적절한 로깅 상수로 변환
-    log_level_constant = getattr(logging, log_level, logging.INFO)
-    # 로그의 출력 기준 설정
-    logger.setLevel(log_level_constant)
-    # log 출력 형식
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # log를 console에 출력
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    # log를 파일에 출력
-    #file_handler = logging.FileHandler('GoogleTrendsBot.log')
-    #file_handler.setFormatter(formatter)
-    #logger.addHandler(file_handler)
     
 if __name__ == '__main__':
 
     log_level = os.getenv('LOG_LEVEL', 'INFO')
-    set_logging(log_level)
+    tool_util.set_logging(log_level)
+    tool_util.set_folder()
 
     load_metadata_store()
 
