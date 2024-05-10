@@ -11,4 +11,5 @@ def delay_h(hour):
 
 def one_week_ago():
     now = get_kr_time()
-    return datetime(now.year, now.month, now.day, 0, 0, 0) - timedelta(weeks=1)
+    one_week_ago_time = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=now.tzinfo) - timedelta(weeks=1)
+    return one_week_ago_time
