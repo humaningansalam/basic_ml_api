@@ -1,10 +1,8 @@
-
-from prometheus_client import Gauge
-import threading
-import psutil
-import logging
 import os
-
+import logging
+import psutil
+import threading
+from prometheus_client import Gauge
 
 class ResourceMonitor:
     def __init__(self, report_interval=5):  # 모니터링 간격을 5초로 설정
