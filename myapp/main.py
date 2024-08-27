@@ -10,9 +10,9 @@ import keras
 from flask import Flask, request, jsonify
 
 from prometheus_flask_exporter import PrometheusMetrics
-from prometheus_client import Gauge, Counter
 
 from monitor import ResourceMonitor
+from comm_.prometheus_metric import get_metrics
 import comm_.tool_util as tool_util
 
 #flask
@@ -27,10 +27,8 @@ model_cache = {}
 model_store_path = "../data/model_"
 max_cache_size = 10  # 최대 캐시할 모델 개수
 
-# 프로메테우스 지표 정의
-model_cache_usage = Gauge('model_cache_usage', 'Number of models currently cached')
-errors_count = Counter('errors', 'Number of errors', ['type'])
-predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
+# Prometheus 메트릭스 인스턴스 가져오기
+prometheus_metrics = get_metrics()
 
 def load_model_to_cache(model_hash):
     """
@@ -50,7 +48,7 @@ def load_model_to_cache(model_hash):
         model_cache[model_hash] = model
         
         # 프로메테우스 모델 캐시 사용량 업데이트
-        model_cache_usage.set(len(model_cache))
+        prometheus_metrics.set_model_cache_usage(len(model_cache))
         
         logging.info(f"Model {model_hash} loaded into cache successfully.")
     except Exception as e:
@@ -102,7 +100,7 @@ def upload_model():
         return jsonify({'message': response_message}), 200
 
     except Exception as e:
-        errors_count.labels(type='upload_model_error').inc()
+        prometheus_metrics.increment_error_count('upload_model_error')
         response_message = f'An error occurred: {str(e)}'
         logging.error(response_message)
         
@@ -166,12 +164,12 @@ def predict():
         prediction = model.predict(array)
 
         # 결과 완료 카운트
-        predictions_completed.inc()
+        prometheus_metrics.increment_predictions_completed()
 
         # 결과 반환
         return jsonify({'prediction': prediction.tolist()})
     except Exception as e:
-        errors_count.labels(type='predict').inc()
+        prometheus_metrics.increment_error_count('predict')
         response_message = f'An error occurred: {str(e)}'
         logging.error(response_message)
         return jsonify({'error': response_message}), 500

@@ -2,12 +2,10 @@ import os
 import logging
 import psutil
 import threading
-from prometheus_client import Gauge
 
+from comm_.prometheus_metric import get_metrics
 class ResourceMonitor:
     def __init__(self, report_interval=5):  # 모니터링 간격을 5초로 설정
-        self.app_cpu_usage = Gauge('app_cpu_usage', 'Description of CPU usage')
-        self.app_ram_usage = Gauge('app_ram_usage', 'Description of RAM usage')
         self.pid = os.getpid()
         self.process = psutil.Process(self.pid)
 
@@ -17,9 +15,10 @@ class ResourceMonitor:
         self.ram_usage_samples = []
         self.monitoring = True
 
+        self.prometheus_metrics = get_metrics() 
+
         self.sample_thread = threading.Thread(target=self.sample)
         self.sample_thread.start()
-
 
     def sample(self):
         while self.monitoring:
@@ -44,8 +43,8 @@ class ResourceMonitor:
         else:
             avg_ram_usage = 0  # 또는 적절한 기본값
 
-        self.app_cpu_usage.set(avg_cpu_usage)
-        self.app_ram_usage.set(avg_ram_usage)
+        self.prometheus_metrics.set_app_cpu_usage(avg_cpu_usage)
+        self.prometheus_metrics.set_app_ram_usage(avg_ram_usage)
 
         # 샘플 리스트 초기화
         self.cpu_usage_samples = []
@@ -66,6 +65,7 @@ class ResourceMonitor:
             self.sample_and_report()  # 모니터링 시작
         except Exception as e:
             logging.error(f'error: {e}')
+            self.prometheus_metrics.increment_error_count('monitor_error')
 
     def stop_monitor(self):
         self.monitoring = False
