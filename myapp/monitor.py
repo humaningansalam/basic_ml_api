@@ -5,11 +5,12 @@ import threading
 
 from comm_.prometheus_metric import get_metrics
 class ResourceMonitor:
-    def __init__(self, report_interval=5):  # 모니터링 간격을 5초로 설정
+    def __init__(self, report_interval=5, sample_interval=1):  # 모니터링 간격 추가
         self.pid = os.getpid()
         self.process = psutil.Process(self.pid)
 
         self.report_interval = report_interval
+        self.sample_interval = sample_interval
 
         self.cpu_usage_samples = []
         self.ram_usage_samples = []
@@ -22,9 +23,9 @@ class ResourceMonitor:
 
     def sample(self):
         while self.monitoring:
-            cpu_usage = self.process.cpu_percent(interval=1)
+            cpu_usage = self.process.cpu_percent(interval=self.sample_interval)
             ram_usage = self.process.memory_info().rss
-
+            
             logging.debug(cpu_usage)
             logging.debug(ram_usage)
             self.cpu_usage_samples.append(cpu_usage)
