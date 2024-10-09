@@ -25,7 +25,7 @@ class ResourceMonitor:
         while self.monitoring:
             cpu_usage = self.process.cpu_percent(interval=self.sample_interval)
             ram_usage = self.process.memory_info().rss
-            
+
             logging.debug(cpu_usage)
             logging.debug(ram_usage)
             self.cpu_usage_samples.append(cpu_usage)
@@ -55,10 +55,10 @@ class ResourceMonitor:
         if not self.monitoring:
             return  
 
-        self.report()  # 리소스 사용량을 보고
-        
-        threading.Timer(self.report_interval, self.sample_and_report).start()
-
+        self.report()
+        timer = threading.Timer(self.report_interval, self.sample_and_report)
+        timer.setDaemon(True)  # 데몬으로 설정하여 메인 프로세스 종료 시 자동 종료
+        timer.start()
 
     def start_monitor(self):
         try:
