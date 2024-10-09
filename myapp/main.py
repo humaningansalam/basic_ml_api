@@ -228,9 +228,7 @@ if __name__ == '__main__':
     load_metadata_store()
 
     with ThreadPoolExecutor() as executor:
-        executor.submit(sched_del_oldmodel())
-
-    with ThreadPoolExecutor() as executor:
+        executor.submit(sched_del_oldmodel)
         resource_monitor = ResourceMonitor()
         executor.submit(resource_monitor.start_monitor)
 
