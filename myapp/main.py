@@ -6,6 +6,7 @@ import threading
 from zipfile import ZipFile
 import numpy as np
 import keras
+from collections import OrderedDict
 
 from flask import Flask, request, jsonify
 
@@ -21,7 +22,7 @@ metrics = PrometheusMetrics(app)
 
 # 메타데이터 저장소 및 모델 캐시 초기화
 metadata_store = {}
-model_cache = {}
+model_cache = OrderedDict()
 
 # 모델 저장 경로 및 캐시 사이즈 설정
 model_store_path = "../data/model_"
@@ -35,22 +36,20 @@ def load_model_to_cache(model_hash):
     모델을 캐시에 로드하는 함수
     """
     try:
-        if len(model_cache) >= max_cache_size:
-            # 캐시가 꽉 찼을 경우, 가장 오래된 항목 제거
-            oldest_key = next(iter(model_cache))
-            logging.info(f"Removing oldest model from cache: {oldest_key}")
-            del model_cache[oldest_key]
-            
-        model_file_path = metadata_store[model_hash]['file_path']
-        
-        # 모델 로드 시도
-        model = keras.models.load_model(model_file_path)
-        model_cache[model_hash] = model
-        
-        # 프로메테우스 모델 캐시 사용량 업데이트
-        prometheus_metrics.set_model_cache_usage(len(model_cache))
-        
-        logging.info(f"Model {model_hash} loaded into cache successfully.")
+        if model_hash in model_cache:
+            # 모델이 이미 캐시에 있는 경우, 순서 갱신
+            model_cache.move_to_end(model_hash)
+        else:
+            if len(model_cache) >= max_cache_size:
+                # 캐시가 꽉 찼을 경우, 가장 오래된 항목 제거
+                oldest_key, _ = model_cache.popitem(last=False)
+                logging.info(f"Removing oldest model from cache: {oldest_key}")
+
+            # 모델 로드
+            model_file_path = metadata_store[model_hash]['file_path']
+            model = keras.models.load_model(model_file_path)
+            model_cache[model_hash] = model
+            logging.info(f"Model {model_hash} loaded into cache successfully.")
     except Exception as e:
         logging.error(f"Unexpected error occurred while loading model to cache: {str(e)}")
 
