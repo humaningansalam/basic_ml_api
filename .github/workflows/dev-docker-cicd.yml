@@ -33,7 +33,7 @@ jobs:
           exit 1
 
     - name: Show Docker logs on Test failure
-      if: failure() 
+      if: steps.test.outcome == 'failure'
       run: |
           docker logs myapp-container
 
