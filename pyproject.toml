@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "basic-ml-api"
+version = "0.1.0"
+description = ""
+authors = ["sanghun9634"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+tensorflow = "2.15.0"
+Flask = "^3.0.2"
+prometheus-flask-exporter = "0.23.0"
+psutil = "5.9.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
