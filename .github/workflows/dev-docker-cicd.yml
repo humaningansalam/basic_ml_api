@@ -19,12 +19,17 @@ jobs:
       run: docker build -t myapp -f Dockerfile .
 
     - name: Run Docker container
-      run: docker run -d -p 5000:5000 myapp
+      run: docker run -d -p 5000:5000 --name myapp-container myapp
 
     - name: Test
+      id: test
       run: |
-        sleep 100
-        curl http://localhost:5000/health
+          sleep 100
+          curl -f http://localhost:5000/health
+
+    - name: Show Docker logs on Test failure
+      if: ${{ steps.test.outcome == 'failure' }}
+      run: docker logs myapp-container
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
