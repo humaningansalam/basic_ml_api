@@ -1,0 +1,39 @@
+name: Dev Docker Image CICD
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: docker build -t myapp -f Dockerfile .
+
+    - name: Run Docker container
+      run: docker run -d -p 5000:5000 myapp
+
+    - name: Test
+      run: |
+        sleep 100
+        curl http://localhost:5000/health
+
+    - name: action-slack
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        author_name: Gibhub Actions - build
+        fields: repo,commit,message,author # action,eventName,ref,workflow,job,took 추가할 수 있음
+        mention: here
+        if_mention: failure,cancelled
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALARM }} # required
+      if: always() # Pick up events even if the job fails or is canceled.
