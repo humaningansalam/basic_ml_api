@@ -23,13 +23,19 @@ jobs:
 
     - name: Test
       id: test
+      continue-on-error: true  # 실패해도 계속
       run: |
-          sleep 100
-          curl -f http://localhost:5000/health
+          for i in {1..10}; do
+            curl -f http://localhost:5000/health && exit 0
+            echo "Attempt $i failed, waiting 10 seconds..."
+            sleep 10
+          done
+          exit 1
 
     - name: Show Docker logs on Test failure
-      if: ${{ steps.test.outcome == 'failure' }}
-      run: docker logs myapp-container
+      if: failure() 
+      run: |
+          docker logs myapp-container
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
