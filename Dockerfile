@@ -18,4 +18,4 @@ WORKDIR ./myapp
 EXPOSE 5000
 
 # 시작 명령
-CMD ["python3", "./src/main.py"]
+CMD ["python3", "src/main.py"]
