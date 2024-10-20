@@ -1,9 +1,6 @@
 import pytest
-import sys
-import os
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from main import app as flask_app
+from src.main import app as flask_app
 
 @pytest.fixture
 def app():
