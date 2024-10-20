@@ -3,7 +3,8 @@ import logging
 import psutil
 import threading
 
-from comm_.prometheus_metric import get_metrics
+from prometheus_metric import get_metrics
+
 class ResourceMonitor:
     def __init__(self, report_interval=5, sample_interval=1):  # 모니터링 간격 추가
         self.pid = os.getpid()
