@@ -21,8 +21,7 @@ jobs:
     - name: Run Docker container
       run: docker run -d -p 5000:5000 --name myapp-container myapp
 
-    - name: Test
-      id: test
+    - name: health check
       run: |
           for i in {1..6}; do
             curl -f http://localhost:5000/health && exit 0
@@ -38,6 +37,11 @@ jobs:
           docker ps -a
           echo "=== Docker Container Logs ==="
           docker logs myapp-container
+
+    - name: Run Tests
+      run: |
+          docker exec myapp-container pytest tests/test_flow.py --disable-warnings -v
+          docker logs myapp-container 
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
