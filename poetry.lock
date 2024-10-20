@@ -690,21 +690,6 @@ files = [
 twisted = ["twisted"]
 
 [[package]]
-name = "prometheus-flask-exporter"
-version = "0.23.0"
-description = "Prometheus metrics exporter for Flask"
-optional = false
-python-versions = "*"
-files = [
-    {file = "prometheus_flask_exporter-0.23.0-py3-none-any.whl", hash = "sha256:7a026b4fdd54ebeddb77589333efe3a1ec43c7c717468825b0b3e9b6c33f7e9e"},
-    {file = "prometheus_flask_exporter-0.23.0.tar.gz", hash = "sha256:e4e6beb1b8e1e164da6d70fe1edefc95ef184f113b5047f66f4b7262233da9c0"},
-]
-
-[package.dependencies]
-flask = "*"
-prometheus-client = "*"
-
-[[package]]
 name = "protobuf"
 version = "4.25.5"
 description = ""
@@ -1160,4 +1145,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "==3.10.*"
-content-hash = "26c0b59db6ab42200c28a08fb74608eeb59524b5f183cba1e8d374785744a139"
+content-hash = "592ce915f4f34d97c6fefa7939c0ce3ed883cc48b7fb19c0f0e817b37f0d35e6"
