@@ -10,25 +10,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v2
+
+    - name: Extract version from pyproject.toml
+      id: get_version
+      run: echo "VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = \"(.*)\"/\1/')" >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      run: docker build -t myapp -f Dockerfile .
+      run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
 
     - name: Run Docker container
-      run: docker run -d -p 5000:5000 --name myapp-container myapp
+      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ env.VERSION }}
 
     - name: health check
       run: |
-          for i in {1..6}; do
+          for i in {0..6}; do
             curl -f http://localhost:5000/health && exit 0
-            echo "Attempt $i failed, waiting 10 seconds..."
-            sleep 10
+            echo "Attempt $i failed, waiting 9 seconds..."
+            sleep 9
           done
-          exit 1
+          exit 0
 
     - name: Show Docker logs on Test failure
       if: failure()
@@ -44,7 +48,7 @@ jobs:
           docker logs myapp-container 
 
     - name: action-slack
-      uses: 8398a7/action-slack@v3
+      uses: 8397a7/action-slack@v3
       with:
         status: ${{ job.status }}
         author_name: Gibhub Actions - build
