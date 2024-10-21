@@ -12,8 +12,8 @@ from flask import Flask, request, jsonify, Response
 from prometheus_client import generate_latest
 
 from monitor import ResourceMonitor
-from common.prometheus_metric import get_metrics
-import common.tool_util as tool_util
+from myapp.common.prometheus_metric import get_metrics
+import myapp.common.tool_util as tool_util
 
 # Flask 설정
 app = Flask(__name__)
