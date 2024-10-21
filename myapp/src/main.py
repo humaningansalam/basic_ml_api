@@ -33,24 +33,22 @@ max_cache_size = 10  # 최대 캐시할 모델 개수
 app.metadata_store = metadata_store
 app.metrics = metrics
 
-# 메트릭스 업데이트를 위한 함수
 def load_model_to_cache(model_hash):
     """
     모델을 캐시에 로드하는 함수
     """
     try:
         if model_hash in model_cache:
-            # 모델이 이미 캐시에 있는 경우, 순서 갱신
+            # 이미 캐시에 존재하는 경우 순서를 갱신
             model_cache.move_to_end(model_hash)
-            logging.debug(f"Model {model_hash} accessed in cache.")
         else:
             if len(model_cache) >= max_cache_size:
-                # 캐시가 꽉 찼을 경우, 가장 오래된 항목 제거
+                # 캐시가 꽉 찬 경우, 가장 오래된 항목 제거
                 oldest_key, _ = model_cache.popitem(last=False)
                 logging.info(f"Removing oldest model from cache: {oldest_key}")
-                metrics.set_model_cache_usage(len(model_cache))  # 캐시 업데이트
+                metrics.set_model_cache_usage(len(model_cache))
 
-            # 모델 로드
+            # 모델 로드 시도
             model_file_path = metadata_store[model_hash]['file_path']
             model = keras.models.load_model(model_file_path)
             model_cache[model_hash] = model
@@ -58,11 +56,16 @@ def load_model_to_cache(model_hash):
         
         # 캐시 사용량 업데이트
         metrics.set_model_cache_usage(len(model_cache))
-        logging.debug(f"model_cache_usage set to {len(model_cache)}")
+
+    except OSError as e:
+        logging.error(f"Model file not found: {str(e)}")
+        metrics.increment_error_count('load_model_error')  # 모델 로드 실패 시 카운트
+        raise  # 예외를 다시 발생시켜 `predict` 함수에서 적절히 처리하도록 유도
     except Exception as e:
         logging.error(f"Unexpected error occurred while loading model to cache: {str(e)}")
         metrics.increment_error_count('load_model_error')
-
+        raise  # 예외를 다시 발생시켜 `predict` 함수에서 적절히 처리하도록 유도
+    
 @app.route('/metrics')
 def metrics_endpoint():
     """
@@ -178,7 +181,7 @@ def predict():
         else:
             metrics.increment_cache_miss()
             logging.debug(f"Cache miss for model {model_hash}")
-            load_model_to_cache(model_hash)
+            load_model_to_cache(model_hash)  # 모델 로드를 시도하고 실패 시 예외가 발생
 
         model = model_cache.get(model_hash)
         if model is None:
@@ -199,6 +202,11 @@ def predict():
         logging.info(f"Prediction completed for model {model_hash}")
 
         return jsonify({'prediction': prediction.tolist()})
+
+    except OSError as e:
+        logging.error(f"Model file not found: {str(e)}")
+        return jsonify({'error': 'Model file not found'}), 500  # 모델 파일을 찾지 못할 경우
+
     except Exception as e:
         metrics.increment_error_count('predict')
         response_message = f'An error occurred: {str(e)}'
