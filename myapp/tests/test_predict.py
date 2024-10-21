@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 @patch('keras.models.load_model')
 @patch('myapp.src.main.load_model_to_cache')
-@patch('myapp.common.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
+@patch('myapp.common.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
 def test_predict_success(mock_time, mock_load_cache, mock_keras_load, client, get_counter_value):
     # 모형 인스턴스 모킹
     mock_model = MagicMock()
