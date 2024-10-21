@@ -65,7 +65,7 @@ jobs:
         script: |
           cd ~/docker/basic_ml_api
           docker compose down --rmi all
-          docker compose build
+          docker compose build --no-cache
           docker compose up -d
 
     - name: action-slack
