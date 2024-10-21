@@ -11,7 +11,7 @@ import keras
 from flask import Flask, request, jsonify, Response
 from prometheus_client import generate_latest
 
-from monitor import ResourceMonitor
+from src.monitor import ResourceMonitor
 from common.prometheus_metric import get_metrics
 import common.tool_util as tool_util
 
