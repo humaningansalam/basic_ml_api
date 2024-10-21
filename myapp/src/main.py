@@ -29,6 +29,10 @@ model_cache = OrderedDict()
 model_store_path = "../data/model_"
 max_cache_size = 10  # 최대 캐시할 모델 개수
 
+# Flask 애플리케이션 객체에 속성으로 할당
+app.metadata_store = metadata_store
+app.metrics = metrics
+
 # 메트릭스 업데이트를 위한 함수
 def load_model_to_cache(model_hash):
     """
