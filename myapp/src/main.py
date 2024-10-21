@@ -205,6 +205,16 @@ def predict():
         logging.error(response_message)
         return jsonify({'error': response_message}), 500
 
+@app.route('/reset_cache', methods=['POST'])
+def reset_cache():
+    """
+    모델 캐시를 초기화하는 엔드포인트 (테스트용)
+    """
+    global model_cache
+    model_cache.clear()
+    logging.info('Model cache has been cleared')
+    return jsonify({'message': 'Model cache cleared'}), 200
+
 @app.route('/health', methods=['GET'])
 def health():
     """
