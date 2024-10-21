@@ -42,5 +42,5 @@ def test_upload_model_missing_data(mock_time, mock_load_model, client, get_count
     assert response.json['error'] == 'Model file and hash are required'
     
     # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors_count', {'type':'upload_model_missing_data'})
+    counter_value = get_counter_value('errors', {'type':'upload_model_missing_data'})
     assert counter_value == 1

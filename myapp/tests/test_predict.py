@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 @patch('myapp.common.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
 @patch('myapp.src.main.load_model_to_cache')
 @patch('keras.models.load_model')
-def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock_time, client):
+def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock_time, client, get_counter_value):
     # 모형 인스턴스 모킹
     mock_model = MagicMock()
     mock_model.predict.return_value = np.array([1, 2, 3])
@@ -42,7 +42,7 @@ def test_predict_missing_data(mock_time, client, get_counter_value):
     assert response.json['error'] == 'Data and Model hash are required'
     
     # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors_count', {'type':'predict_missing_data'})
+    counter_value = get_counter_value('errors', {'type':'predict_missing_data'})
     assert counter_value == 1
 
 @patch('myapp.common.tool_util.get_kr_time')
@@ -64,8 +64,8 @@ def test_predict_model_load_failed(mock_load_cache, mock_time, client, get_count
     response = client.post('/predict?hash=testhash123', json=data)
     
     assert response.status_code == 500
-    assert response.json['error'] == 'Model could not be loaded'
+    assert response.json['error'] == 'An error occurred: Model load failed'
     
     # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors_count', {'type':'predict_model_load_failed'})
+    counter_value = get_counter_value('errors', {'type':'predict_model_load_failed'})
     assert counter_value == 1
