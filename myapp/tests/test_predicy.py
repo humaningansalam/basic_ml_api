@@ -31,21 +31,23 @@ def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock
     mock_load_model.assert_called_once_with('testhash123')
     
     # 예측 카운트가 증가했는지 확인
-    assert client.application.metrics.predictions_completed.value == 1
+    counter_value = get_counter_value('predictions_completed', {})
+    assert counter_value == 1
 
 @patch('myapp.common.tool_util.get_kr_time')
-def test_predict_missing_data(mock_time, client):
+def test_predict_missing_data(mock_time, client, get_counter_value):
     response = client.post('/predict', json={}, content_type='application/json')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Data and Model hash are required'
     
     # 에러 카운트가 증가했는지 확인
-    assert client.application.metrics.errors_count.labels(type='predict_missing_data').value == 1
+    counter_value = get_counter_value('errors_count', {'type':'predict_missing_data'})
+    assert counter_value == 1
 
 @patch('myapp.common.tool_util.get_kr_time')
 @patch('myapp.src.main.load_model_to_cache')
-def test_predict_model_load_failed(mock_load_cache, mock_time, client):
+def test_predict_model_load_failed(mock_load_cache, mock_time, client, get_counter_value):
     # 사전 메타데이터 설정
     client.application.metadata_store['testhash123'] = {
         'file_path': '../data/model_testhash123',
@@ -65,4 +67,5 @@ def test_predict_model_load_failed(mock_load_cache, mock_time, client):
     assert response.json['error'] == 'Model could not be loaded'
     
     # 에러 카운트가 증가했는지 확인
-    assert client.application.metrics.errors_count.labels(type='predict_model_load_failed').value == 1
+    counter_value = get_counter_value('errors_count', {'type':'predict_model_load_failed'})
+    assert counter_value == 1

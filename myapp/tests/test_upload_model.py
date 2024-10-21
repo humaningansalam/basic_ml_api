@@ -35,11 +35,12 @@ def test_upload_model_success(mock_time, mock_load_model, client):
 
 @patch('myapp.src.main.load_model_to_cache')
 @patch('myapp.common.tool_util.get_kr_time')
-def test_upload_model_missing_data(mock_time, mock_load_model, client):
+def test_upload_model_missing_data(mock_time, mock_load_model, client, get_counter_value):
     response = client.post('/upload_model', data={}, content_type='multipart/form-data')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Model file and hash are required'
     
     # 에러 카운트가 증가했는지 확인
-    assert client.application.metrics.errors_count.labels(type='upload_model_missing_data').value == 1
+    counter_value = get_counter_value('errors_count', {'type':'upload_model_missing_data'})
+    assert counter_value == 1

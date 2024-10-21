@@ -1,4 +1,5 @@
 import pytest
+from prometheus_client import REGISTRY
 
 from myapp.src.main import app as flask_app
 
@@ -16,3 +17,14 @@ def client(app):
 def runner(app):
     """Flask CLI runner를 반환하는 fixture"""
     return app.test_cli_runner()
+
+@pytest.fixture
+def get_counter_value():
+    def _get_counter_value(counter_name, label_values):
+        for metric in REGISTRY.collect():
+            if metric.name == counter_name:
+                for sample in metric.samples:
+                    if sample.labels == label_values:
+                        return sample.value
+        return None
+    return _get_counter_value
