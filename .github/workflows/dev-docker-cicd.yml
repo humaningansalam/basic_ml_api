@@ -44,7 +44,7 @@ jobs:
 
     - name: Run Tests
       run: |
-          docker exec myapp-container pytest ./myapp/tests/ --disable-warnings -v
+          docker exec myapp-container pytest --disable-warnings -v
           docker logs myapp-container 
 
     - name: action-slack
