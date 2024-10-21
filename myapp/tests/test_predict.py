@@ -53,8 +53,6 @@ def test_predict_model_load_failed(client, get_counter_value):
         'used': '2024-04-27T12:00:00'
     }
 
-    client.post('/reset_cache')
-
     data = [0.1, 0.2, 0.3]
     response = client.post('/predict?hash=testhash123', json=data)
 
