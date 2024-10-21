@@ -14,7 +14,7 @@ def create_test_zip():
     return bytes_io
 
 @patch('myapp.src.main.load_model_to_cache')
-@patch('myapp.src.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
+@patch('myapp.common.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
 def test_upload_model_success(mock_time, mock_load_model, client):
     test_zip = create_test_zip()
     data = {
@@ -34,7 +34,7 @@ def test_upload_model_success(mock_time, mock_load_model, client):
     assert client.application.metadata_store['testhash123']['used'] == '2024-04-27T12:00:00'
 
 @patch('myapp.src.main.load_model_to_cache')
-@patch('myapp.src.tool_util.get_kr_time')
+@patch('myapp.common.tool_util.get_kr_time')
 def test_upload_model_missing_data(mock_time, mock_load_model, client):
     response = client.post('/upload_model', data={}, content_type='multipart/form-data')
     

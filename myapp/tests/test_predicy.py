@@ -3,7 +3,7 @@ from typing import OrderedDict
 import numpy as np
 from unittest.mock import patch, MagicMock
 
-@patch('myapp.src.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
+@patch('myapp.common.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
 @patch('myapp.src.main.load_model_to_cache')
 @patch('keras.models.load_model')
 def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock_time, client):
@@ -33,7 +33,7 @@ def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock
     # 예측 카운트가 증가했는지 확인
     assert client.application.metrics.predictions_completed.value == 1
 
-@patch('src.main.tool_util.get_kr_time')
+@patch('src.common.tool_util.get_kr_time')
 def test_predict_missing_data(mock_time, client):
     response = client.post('/predict', json={}, content_type='application/json')
     
@@ -43,7 +43,7 @@ def test_predict_missing_data(mock_time, client):
     # 에러 카운트가 증가했는지 확인
     assert client.application.metrics.errors_count.labels(type='predict_missing_data').value == 1
 
-@patch('src.main.tool_util.get_kr_time')
+@patch('src.common.tool_util.get_kr_time')
 @patch('src.main.load_model_to_cache')
 def test_predict_model_load_failed(mock_load_cache, mock_time, client):
     # 사전 메타데이터 설정
