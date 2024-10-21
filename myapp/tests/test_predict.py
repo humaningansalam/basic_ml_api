@@ -28,7 +28,7 @@ def test_predict_success(mock_time, mock_load_cache, mock_keras_load, client, ge
     assert response.json['prediction'] == [1, 2, 3]
     
     # 모델 로드 함수가 호출되었는지 확인
-    mock_load_model.assert_called_once_with('testhash123')
+    mock_keras_load.assert_called_once_with('testhash123')
     
     # 예측 카운트가 증가했는지 확인
     counter_value = get_counter_value('predictions_completed', {})
