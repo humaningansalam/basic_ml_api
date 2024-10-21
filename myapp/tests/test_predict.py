@@ -45,7 +45,7 @@ def test_predict_missing_data(mock_time, client, get_counter_value):
     counter_value = get_counter_value('errors', {'type':'predict_missing_data'})
     assert counter_value == 1
 
-@patch('myapp.common.load_model.load_model_to_cache')
+@patch('myapp.src.main.load_model_to_cache')
 @patch('myapp.common.tool_util.get_kr_time')
 def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_counter_value):
     # 사전 메타데이터 설정
