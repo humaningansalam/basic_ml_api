@@ -3,10 +3,10 @@ from typing import OrderedDict
 import numpy as np
 from unittest.mock import patch, MagicMock
 
-@patch('myapp.common.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
-@patch('myapp.src.main.load_model_to_cache')
 @patch('keras.models.load_model')
-def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock_time, client, get_counter_value):
+@patch('myapp.src.main.load_model_to_cache')
+@patch('myapp.common.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
+def test_predict_success(mock_time, mock_load_cache, mock_keras_load, client, get_counter_value):
     # 모형 인스턴스 모킹
     mock_model = MagicMock()
     mock_model.predict.return_value = np.array([1, 2, 3])
@@ -45,7 +45,7 @@ def test_predict_missing_data(mock_time, client, get_counter_value):
     counter_value = get_counter_value('errors', {'type':'predict_missing_data'})
     assert counter_value == 1
 
-def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_counter_value):
+def test_predict_model_load_failed(client, get_counter_value):
     # 사전 메타데이터 설정
     client.application.metadata_store['testhash123'] = {
         'file_path': '../data/non_existent_model',
