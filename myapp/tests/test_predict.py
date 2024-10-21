@@ -53,9 +53,9 @@ def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_count
         'file_path': '../data/model_testhash123',
         'used': '2024-04-27T12:00:00'
     }
-    
-    # 캐시에 모델이 없는 상태로 초기화
-    client.application.model_cache.clear()
+
+    # 캐시 리셋을 위한 엔드포인트 호출
+    client.post('/reset_cache')  # 캐시를 초기화
     
     # `load_model_to_cache` 호출 시 예외 발생하도록 설정
     mock_load_cache.side_effect = Exception("Model load failed")
@@ -68,4 +68,4 @@ def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_count
     
     # 에러 카운트가 증가했는지 확인
     counter_value = get_counter_value('errors', {'type':'predict_model_load_failed'})
-    assert counter_value == 1
+    assert counter_value == 1 
