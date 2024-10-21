@@ -33,7 +33,7 @@ def test_predict_success(mock_load_model, mock_keras_load, mock_load_cache, mock
     # 예측 카운트가 증가했는지 확인
     assert client.application.metrics.predictions_completed.value == 1
 
-@patch('src.common.tool_util.get_kr_time')
+@patch('myapp.common.tool_util.get_kr_time')
 def test_predict_missing_data(mock_time, client):
     response = client.post('/predict', json={}, content_type='application/json')
     
@@ -43,8 +43,8 @@ def test_predict_missing_data(mock_time, client):
     # 에러 카운트가 증가했는지 확인
     assert client.application.metrics.errors_count.labels(type='predict_missing_data').value == 1
 
-@patch('src.common.tool_util.get_kr_time')
-@patch('src.main.load_model_to_cache')
+@patch('myapp.common.tool_util.get_kr_time')
+@patch('myapp.src.main.load_model_to_cache')
 def test_predict_model_load_failed(mock_load_cache, mock_time, client):
     # 사전 메타데이터 설정
     client.application.metadata_store['testhash123'] = {
