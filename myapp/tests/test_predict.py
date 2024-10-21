@@ -45,27 +45,20 @@ def test_predict_missing_data(mock_time, client, get_counter_value):
     counter_value = get_counter_value('errors', {'type':'predict_missing_data'})
     assert counter_value == 1
 
-@patch('myapp.src.main.load_model_to_cache')
-@patch('myapp.common.tool_util.get_kr_time')
 def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_counter_value):
     # 사전 메타데이터 설정
     client.application.metadata_store['testhash123'] = {
-        'file_path': '../data/model_testhash123',
+        'file_path': '../data/non_existent_model',
         'used': '2024-04-27T12:00:00'
     }
 
-    # 캐시 리셋을 위한 엔드포인트 호출
-    client.post('/reset_cache')  # 캐시를 초기화
-    
-    # `load_model_to_cache` 호출 시 예외 발생하도록 설정
-    mock_load_cache.side_effect = Exception("Model load failed")
-    
+    client.post('/reset_cache')
+
     data = [0.1, 0.2, 0.3]
     response = client.post('/predict?hash=testhash123', json=data)
-    
+
     assert response.status_code == 500
-    assert response.json['error'] == 'An error occurred: Model load failed'
-    
-    # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors', {'type':'predict_model_load_failed'})
-    assert counter_value == 1 
+    assert response.json['error'] == 'Model could not be loaded'
+
+    counter_value = get_counter_value('errors', {'type': 'predict_model_load_failed'})
+    assert counter_value == 1
