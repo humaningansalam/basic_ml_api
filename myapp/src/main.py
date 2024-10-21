@@ -65,7 +65,7 @@ def load_model_to_cache(model_hash):
         logging.error(f"Unexpected error occurred while loading model to cache: {str(e)}")
         metrics.increment_error_count('load_model_error')
         raise  # 예외를 다시 발생시켜 `predict` 함수에서 적절히 처리하도록 유도
-    
+
 @app.route('/metrics')
 def metrics_endpoint():
     """
@@ -205,6 +205,7 @@ def predict():
 
     except OSError as e:
         logging.error(f"Model file not found: {str(e)}")
+        metrics.increment_error_count('predict_model_load_failed') 
         return jsonify({'error': 'Model file not found'}), 500  # 모델 파일을 찾지 못할 경우
 
     except Exception as e:
