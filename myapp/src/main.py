@@ -11,275 +11,111 @@ import keras
 from flask import Flask, request, jsonify, Response
 from prometheus_client import generate_latest
 
+from myapp.src.model_manager import ModelManager
 from myapp.src.monitor import ResourceMonitor
 from myapp.common.prometheus_metric import get_metrics
 import myapp.common.tool_util as tool_util
 
-# Flask 설정
-app = Flask(__name__)
+def create_app(model_store_path: str = "../data/model_") -> Flask:
+    """Flask 애플리케이션 팩토리 함수"""
+    app = Flask(__name__)
+    model_manager = ModelManager(model_store_path)
+    app.model_manager = model_manager
 
-# Prometheus 메트릭스 초기화
-metrics = get_metrics()
+    @app.route('/metrics')
+    def metrics_endpoint():
+        """Prometheus 메트릭스를 노출하는 엔드포인트"""
+        return Response(generate_latest(), mimetype='text/plain')
 
-# 메타데이터 저장소 및 모델 캐시 초기화
-metadata_store = {}
-model_cache = OrderedDict()
+    @app.route('/upload_model', methods=['POST'])
+    def upload_model():
+        """모델 업로드 엔드포인트"""
+        try:
+            model_file = request.files.get('model_file')
+            model_hash = request.args.get('hash')
 
-# 모델 저장 경로 및 캐시 사이즈 설정
-model_store_path = "../data/model_"
-max_cache_size = 10  # 최대 캐시할 모델 개수
+            if not model_file or not model_hash:
+                model_manager.metrics.increment_error_count('upload_model_missing_data')
+                return jsonify({'error': 'Model file and hash are required'}), 400
 
-# Flask 애플리케이션 객체에 속성으로 할당
-app.metadata_store = metadata_store
-app.metrics = metrics
+            message, status_code = model_manager.upload_model(model_file, model_hash)
+            return jsonify({'message': message}), status_code
 
-def load_model_to_cache(model_hash):
-    """
-    모델을 캐시에 로드하는 함수
-    """
-    try:
-        if model_hash in model_cache:
-            # 이미 캐시에 존재하는 경우 순서를 갱신
-            model_cache.move_to_end(model_hash)
-        else:
-            if len(model_cache) >= max_cache_size:
-                # 캐시가 꽉 찬 경우, 가장 오래된 항목 제거
-                oldest_key, _ = model_cache.popitem(last=False)
-                logging.info(f"Removing oldest model from cache: {oldest_key}")
-                metrics.set_model_cache_usage(len(model_cache))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-            # 모델 로드 시도
-            model_file_path = metadata_store[model_hash]['file_path']
-            model = keras.models.load_model(model_file_path)
-            model_cache[model_hash] = model
-            logging.info(f"Model {model_hash} loaded into cache successfully.")
-        
-        # 캐시 사용량 업데이트
-        metrics.set_model_cache_usage(len(model_cache))
-
-    except OSError as e:
-        logging.error(f"Model file not found: {str(e)}")
-        metrics.increment_error_count('load_model_error')  # 모델 로드 실패 시 카운트
-        raise  # 예외를 다시 발생시켜 `predict` 함수에서 적절히 처리하도록 유도
-    except Exception as e:
-        logging.error(f"Unexpected error occurred while loading model to cache: {str(e)}")
-        metrics.increment_error_count('load_model_error')
-        raise  # 예외를 다시 발생시켜 `predict` 함수에서 적절히 처리하도록 유도
-
-@app.route('/metrics')
-def metrics_endpoint():
-    """
-    Prometheus 메트릭스를 노출하는 엔드포인트
-    """
-    return Response(generate_latest(), mimetype='text/plain')
-
-@app.route('/upload_model', methods=['POST'])
-def upload_model():
-    """
-    모델을 받아오는 함수
-    """
-    model_file = request.files.get('model_file')
-    model_hash = request.args.get('hash')
-
-    # 입력 검사
-    if not model_file or not model_hash:
-        response_message = 'Model file and hash are required'
-        logging.error(response_message)
-        metrics.increment_error_count('upload_model_missing_data')
-        return jsonify({'error': response_message}), 400
-
-    # 해시값을 이름으로 가진 폴더 생성
-    model_folder_path = os.path.join(model_store_path, model_hash)
-    os.makedirs(model_folder_path, exist_ok=True)
-    
-    try:
-        # 모델 파일 저장
-        model_file_path = os.path.join(model_folder_path, model_file.filename)
-        model_file.save(model_file_path)
-        logging.debug(f'Model file saved at {model_file_path}')
-
-        # .zip 파일 압축 해제
-        with ZipFile(model_file_path, 'r') as zipObj:
-            # 전체 Zip 파일의 압축을 해제
-            zipObj.extractall(model_folder_path)
-            logging.debug(f'Extracted zip file to {model_folder_path}')
-
-        # 압축 해제 후 원본 .zip 파일 삭제
-        os.remove(model_file_path)
-        logging.debug('Original zip file removed')
-
-        # 메타데이터 저장
-        metadata_store[model_hash] = {'file_path': model_folder_path,
-                                       'used': tool_util.get_kr_time()}
-        logging.debug('Metadata saved')
-
-        # 캐시 업데이트 (필요 시)
-        load_model_to_cache(model_hash)
-
-        response_message = 'File uploaded and processed successfully'
-        logging.info(response_message)
-        return jsonify({'message': response_message}), 200
-
-    except Exception as e:
-        metrics.increment_error_count('upload_model_error')
-        response_message = f'An error occurred: {str(e)}'
-        logging.error(response_message)
-        
-        # 예외 발생 시, 생성된 폴더 삭제
-        if os.path.exists(model_folder_path):
-            shutil.rmtree(model_folder_path)
-            logging.info(f'Removed folder {model_folder_path} due to an error')
-
-        return jsonify({'error': response_message}), 500
-
-@app.route('/get_model', methods=['GET'])
-def get_model():
-    """
-    모델 존재 확인 함수
-    """
-    # 해시값 받기
-    model_hash = request.args.get('hash')
-
-    # 입력 검사
-    if not model_hash:
-        response_message = 'Model hash is required'
-        logging.error(response_message)
-        metrics.increment_error_count('get_model_missing_hash')
-        return jsonify({'error': response_message}), 400
-    
-    # 메타데이터 조회
-    if model_hash not in metadata_store:
-        response_message = 'No such model'
-        logging.error(response_message)
-        metrics.increment_error_count('get_model_not_found')
-        return jsonify({'message':response_message}), 404
-
-    metadata = metadata_store[model_hash]
-    return jsonify({'message': metadata}), 200
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    """
-    모델 결과 반환 함수
-    """
-    try:
-        # 데이터 및 모델 해시값 받기
-        data = request.get_json()
+    @app.route('/get_model', methods=['GET'])
+    def get_model():
+        """모델 존재 확인 엔드포인트"""
         model_hash = request.args.get('hash')
 
-        # 입력 검사
-        if not data or not model_hash:
-            response_message = 'Data and Model hash are required'
-            logging.error(response_message)
-            metrics.increment_error_count('predict_missing_data')
-            return jsonify({'error': response_message}), 400
-    
-        # 캐시에서 모델 확인
-        if model_hash in model_cache:
-            metrics.increment_cache_hit()
-            logging.debug(f"Cache hit for model {model_hash}")
-        else:
-            metrics.increment_cache_miss()
-            logging.debug(f"Cache miss for model {model_hash}")
-            load_model_to_cache(model_hash)  # 모델 로드를 시도하고 실패 시 예외가 발생
+        if not model_hash:
+            model_manager.metrics.increment_error_count('get_model_missing_hash')
+            return jsonify({'error': 'Model hash is required'}), 400
 
-        model = model_cache.get(model_hash)
-        if model is None:
-            response_message = 'Model could not be loaded'
-            logging.error(response_message)
-            metrics.increment_error_count('predict_model_load_failed')
-            return jsonify({'error': response_message}), 500
+        if model_hash not in model_manager.metadata_store:
+            model_manager.metrics.increment_error_count('get_model_not_found')
+            return jsonify({'message': 'No such model'}), 404
 
-        # 모델 사용시간 업데이트
-        metadata_store[model_hash]['used'] = tool_util.get_kr_time()
+        return jsonify({'message': model_manager.metadata_store[model_hash]}), 200
 
-        # 데이터를 numpy 배열로 변환 및 예측
-        array = np.array(data)
-        prediction = model.predict(array)
+    @app.route('/predict', methods=['POST'])
+    def predict():
+        """예측 수행 엔드포인트"""
+        try:
+            data = request.get_json()
+            model_hash = request.args.get('hash')
 
-        # 결과 완료 카운트
-        metrics.increment_predictions_completed()
-        logging.info(f"Prediction completed for model {model_hash}")
+            if not data or not model_hash:
+                model_manager.metrics.increment_error_count('predict_missing_data')
+                return jsonify({'error': 'Data and Model hash are required'}), 400
 
-        return jsonify({'prediction': prediction.tolist()})
+            prediction, status_code = model_manager.predict(model_hash, np.array(data))
+            return jsonify({'prediction': prediction.tolist()}), status_code
 
-    except OSError as e:
-        logging.error(f"Model file not found: {str(e)}")
-        metrics.increment_error_count('predict_model_load_failed') 
-        return jsonify({'error': 'Model file not found'}), 500  # 모델 파일을 찾지 못할 경우
-
-    except Exception as e:
-        metrics.increment_error_count('predict')
-        response_message = f'An error occurred: {str(e)}'
-        logging.error(response_message)
-        return jsonify({'error': response_message}), 500
-
-@app.route('/reset_cache', methods=['POST'])
-def reset_cache():
-    """
-    모델 캐시를 초기화하는 엔드포인트 (테스트용)
-    """
-    global model_cache
-    model_cache.clear()
-    logging.info('Model cache has been cleared')
-    return jsonify({'message': 'Model cache cleared'}), 200
-
-@app.route('/health', methods=['GET'])
-def health():
-    """
-    Flask health check 
-    """
-    return "Healthy"
-
-def load_metadata_store():
-    """
-    메타데이터 저장소 초기화
-    """
-    # 모든 모델 폴더 순회
-    for model_hash in os.listdir(model_store_path):
-        model_folder_path = os.path.join(model_store_path, model_hash)
-        if os.path.isdir(model_folder_path):
-            # metadata_store에 메타데이터 추가
-            metadata_store[model_hash] = {
-                'file_path': model_folder_path,
-                'used': tool_util.get_kr_time()
-            }
-
-def del_oldmodel():
-    """
-    오래된 모델 삭제
-    """
-    to_remove = []  # 제거할 항목의 키를 저장할 리스트
-    for model_hash, metadata in metadata_store.items():
-        if metadata['used'] < tool_util.one_week_ago():
-            to_remove.append(model_hash)
-    # 제거할 항목을 metadata_store에서 제거
-    for model_hash in to_remove:
-        remove_path = metadata_store[model_hash]['file_path']
-        if os.path.exists(remove_path):
-            shutil.rmtree(remove_path)
-            logging.info(f"Removed old model: {model_hash}")
-        del metadata_store[model_hash]
-        metrics.set_model_cache_usage(len(model_cache))  # 캐시 업데이트
-
-def sched_del_oldmodel():
-    """
-    스케줄링된 오래된 모델 삭제
-    """
-    threading.Timer(tool_util.delay_h(5), sched_del_oldmodel).start()
-    del_oldmodel()
+        except KeyError as e:
+            return jsonify({'error': str(e)}), 404
         
-if __name__ == '__main__':
+        except OSError as e:
+            return jsonify({'error': 'Model file not found'}), 500
+        
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-    log_level = os.getenv('LOG_LEVEL', 'DEBUG')  # 디버깅을 위해 DEBUG로 설정
-    tool_util.set_logging(log_level)
-    tool_util.set_folder()
+    # @app.route('/reset_cache', methods=['POST'])
+    # def reset_cache():
+    #     """캐시 초기화 엔드포인트 (테스트용)"""
+    #     model_manager.model_cache.clear()
+    #     model_manager.metrics.set_model_cache_usage(0)
+    #     return jsonify({'message': 'Model cache cleared'}), 200
 
-    load_metadata_store()
+    @app.route('/health', methods=['GET'])
+    def health():
+        """헬스체크 엔드포인트"""
+        return "Healthy"
 
+    def start_cleanup_scheduler():
+        """주기적인 모델 정리 스케줄러"""
+        def scheduled_cleanup():
+            while True:
+                model_manager.clean_old_models()
+                tool_util.delay_h(5)  # 5시간 대기
+        
+        cleanup_thread = threading.Thread(target=scheduled_cleanup, daemon=True)
+        cleanup_thread.start()
+
+    # 리소스 모니터링 및 정리 스케줄러 시작
     with ThreadPoolExecutor() as executor:
-        executor.submit(sched_del_oldmodel)
+        executor.submit(start_cleanup_scheduler)
         resource_monitor = ResourceMonitor()
         executor.submit(resource_monitor.start_monitor)
 
+    return app
+
+if __name__ == '__main__':
+    log_level = os.getenv('LOG_LEVEL', 'DEBUG')
+    tool_util.set_logging(log_level)
+    tool_util.set_folder()
+
+    app = create_app()
     app.run(host='0.0.0.0', port=5000)
