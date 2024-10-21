@@ -64,7 +64,7 @@ def test_predict_model_load_failed(mock_time, mock_load_cache, client, get_count
     response = client.post('/predict?hash=testhash123', json=data)
     
     assert response.status_code == 500
-    assert response.json['error'] == 'Model could not be loaded'
+    assert response.json['error'] == 'An error occurred: Model load failed'
     
     # 에러 카운트가 증가했는지 확인
     counter_value = get_counter_value('errors', {'type':'predict_model_load_failed'})
