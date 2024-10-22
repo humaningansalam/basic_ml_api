@@ -3,6 +3,7 @@ import shutil
 import logging
 from zipfile import ZipFile
 from collections import OrderedDict
+import keras
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 
