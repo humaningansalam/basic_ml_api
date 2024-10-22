@@ -32,9 +32,9 @@ jobs:
             echo "Attempt $i failed, waiting 9 seconds..."
             sleep 9
           done
-          exit 0
+          exit 1
 
-    - name: Show Docker logs on Test failure
+    - name: Show Docker logs 
       if: failure()
       run: |
           echo "=== Docker Container Status ==="
