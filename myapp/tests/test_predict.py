@@ -25,8 +25,8 @@ def test_predict_success(mock_load_model, mock_exists, client, get_metric_value)
     # 검증
     assert response.status_code == 200
     assert response.json['prediction'] == [[0.8, 0.2]]
-    assert get_metric_value('predictions_total') == 1
-    assert get_metric_value('cache_misses_total') == 1
+    assert get_metric_value('predictions_completed') == 1
+    assert get_metric_value('cache_misses') == 1
     
 def test_predict_missing_data(client, get_metric_value):
     """데이터 누락 테스트"""
