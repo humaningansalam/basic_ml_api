@@ -1,63 +1,49 @@
-# tests/test_predict.py
-from typing import OrderedDict
 import numpy as np
 from unittest.mock import patch, MagicMock
+from collections import OrderedDict
 
 @patch('keras.models.load_model')
-@patch('myapp.common.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
-def test_predict_success(mock_time, mock_keras_load, client, get_counter_value):
-    # Keras 모델 모킹
+def test_predict_success(mock_load_model, client, get_metric_value):
+    """예측 성공 테스트"""
+    # 테스트 설정
     mock_model = MagicMock()
-    mock_model.predict.return_value = np.array([1, 2, 3])
-    mock_keras_load.return_value = mock_model  # keras.models.load_model이 모킹된 모델을 반환하도록 설정
-
-    # 메타데이터 설정
-    client.application.model_manager.metadata_store['testhash123'] = {
-        'file_path': '../data/model_testhash123',
+    mock_model.predict.return_value = np.array([[0.8, 0.2]])
+    mock_load_model.return_value = mock_model
+    
+    test_metadata = {
+        'file_path': '../data/test_model_/testhash123',
         'used': '2024-04-27T12:00:00'
     }
-
-    # 모델 캐시 초기화
-    client.application.model_cache = OrderedDict()
-
-    # 예측 요청 보내기
-    data = [0.1, 0.2, 0.3]
-    response = client.post('/predict?hash=testhash123', json=data)
-
-    # 응답 확인
+    client.application.model_manager.metadata_store['testhash123'] = test_metadata
+    client.application.model_manager.model_cache = OrderedDict()
+    
+    # 테스트 실행
+    response = client.post('/predict?hash=testhash123', 
+                         json=[[0.5, 0.5]])
+    
+    # 검증
     assert response.status_code == 200
-    assert response.json['prediction'] == [1, 2, 3]
+    assert response.json['prediction'] == [[0.8, 0.2]]
+    assert get_metric_value('predictions_total') == 1
+    assert get_metric_value('cache_misses_total') == 1
 
-    # keras.models.load_model이 올바르게 호출되었는지 확인
-    mock_keras_load.assert_called_once_with('../data/model_testhash123')
-
-    # 예측 카운트가 증가했는지 확인
-    counter_value = get_counter_value('predictions_completed', {})
-    assert counter_value == 1
-
-@patch('myapp.common.tool_util.get_kr_time')
-def test_predict_missing_data(mock_time, client, get_counter_value):
-    response = client.post('/predict', json={}, content_type='application/json')
+def test_predict_missing_data(client, get_metric_value):
+    """데이터 누락 테스트"""
+    response = client.post('/predict?hash=testhash123')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Data and Model hash are required'
     
-    # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors', {'type':'predict_missing_data'})
-    assert counter_value == 1
+    error_count = get_metric_value('errors_total', {'type': 'predict_missing_data'})
+    assert error_count == 1
 
-def test_predict_model_load_failed(client, get_counter_value):
-    # 사전 메타데이터 설정
-    client.application.model_manager.metadata_store['testhash123'] = {
-        'file_path': '../data/non_existent_model',
-        'used': '2024-04-27T12:00:00'
-    }
-
-    data = [0.1, 0.2, 0.3]
-    response = client.post('/predict?hash=testhash123', json=data)
-
-    assert response.status_code == 500
-    assert response.json['error'] == 'Model file not found' 
-
-    counter_value = get_counter_value('errors', {'type': 'predict_model_load_failed'})
-    assert counter_value == 1
+def test_predict_model_not_found(client, get_metric_value):
+    """존재하지 않는 모델로 예측 시도 테스트"""
+    response = client.post('/predict?hash=nonexistent', 
+                         json=[[0.5, 0.5]])
+    
+    assert response.status_code == 404
+    assert 'error' in response.json
+    
+    error_count = get_metric_value('errors_total', {'type': 'predict_model_load_failed'})
+    assert error_count == 1

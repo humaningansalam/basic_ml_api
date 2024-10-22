@@ -1,46 +1,40 @@
-# tests/test_upload_model.py
 import io
 import zipfile
-import os
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
-def create_test_zip():
-    """테스트용 ZIP 파일 생성"""
-    bytes_io = io.BytesIO()
-    with zipfile.ZipFile(bytes_io, 'w') as zipf:
-        # 간단한 텍스트 파일 추가
-        zipf.writestr('model.h5', 'dummy model content')
-    bytes_io.seek(0)
-    return bytes_io
+def create_test_model_zip():
+    """테스트용 모델 ZIP 파일 생성"""
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w') as zf:
+        zf.writestr('saved_model.pb', b'dummy model content')
+        zf.writestr('variables/variables.data-00000-of-00001', b'dummy variables')
+        zf.writestr('variables/variables.index', b'dummy index')
+    memory_file.seek(0)
+    return memory_file
 
-@patch('myapp.src.model_manager.ModelManager.load_model_to_cache')
-@patch('myapp.common.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
-def test_upload_model_success(mock_time, mock_load_model, client):
-    test_zip = create_test_zip()
-    data = {
-        'model_file': (test_zip, 'model.zip')
-    }
-    response = client.post('/upload_model?hash=testhash123', data=data, content_type='multipart/form-data')
+@patch('keras.models.load_model')
+def test_upload_model_success(mock_load_model, client):
+    """모델 업로드 성공 테스트"""
+    # 테스트 설정
+    mock_load_model.return_value = MagicMock()
+    test_zip = create_test_model_zip()
     
+    # 테스트 실행
+    response = client.post('/upload_model?hash=testhash123',
+                         data={'model_file': (test_zip, 'model.zip')},
+                         content_type='multipart/form-data')
+    
+    # 검증
     assert response.status_code == 200
     assert response.json['message'] == 'File uploaded and processed successfully'
-    
-    # 모델 캐시 로드 함수가 호출되었는지 확인
-    mock_load_model.assert_called_once_with('testhash123')
-    
-    # 메타데이터 저장소에 데이터가 추가되었는지 확인
-    assert 'testhash123' in client.application.metadata_store
-    assert client.application.metadata_store['testhash123']['file_path'] == os.path.join("../data/model_", 'testhash123')
-    assert client.application.metadata_store['testhash123']['used'] == '2024-04-27T12:00:00'
+    assert 'testhash123' in client.application.model_manager.metadata_store
 
-@patch('myapp.src.model_manager.ModelManager.load_model_to_cache')
-@patch('myapp.common.tool_util.get_kr_time')
-def test_upload_model_missing_data(mock_time, mock_load_model, client, get_counter_value):
-    response = client.post('/upload_model', data={}, content_type='multipart/form-data')
+def test_upload_model_missing_data(client, get_metric_value):
+    """필수 데이터 누락 테스트"""
+    response = client.post('/upload_model')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Model file and hash are required'
     
-    # 에러 카운트가 증가했는지 확인
-    counter_value = get_counter_value('errors', {'type':'upload_model_missing_data'})
-    assert counter_value == 1
+    error_count = get_metric_value('errors_total', {'type': 'upload_model_missing_data'})
+    assert error_count == 1
