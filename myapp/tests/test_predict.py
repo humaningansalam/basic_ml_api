@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from collections import OrderedDict
 
 @patch('myapp.src.model_manager.os.path.exists')
-@patch('myapp.src.model_manager.keras.models.load_model')
+@patch('keras.models.load_model')
 @patch('myapp.src.model_manager.get_metrics')
 def test_predict_success(mock_get_metrics, mock_load_model, mock_exists, client):
     """예측 성공 테스트"""
