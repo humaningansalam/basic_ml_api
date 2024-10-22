@@ -76,6 +76,7 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
 
         try:
             prediction, status_code = current_app.model_manager.predict(model_hash, np.array(data))
+            metrics.increment_predictions_completed()
             return jsonify({'prediction': prediction.tolist()}), status_code
         except KeyError:
             metrics.increment_error_count('predict_model_not_found')  
