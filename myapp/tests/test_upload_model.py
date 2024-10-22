@@ -33,15 +33,14 @@ def test_upload_model_success(mock_get_metrics, mock_load_model, client):
     assert response.json['message'] == 'File uploaded and processed successfully'
     assert 'testhash123' in client.application.model_manager.metadata_store
 
-@patch('myapp.common.prometheus_metric.get_metrics')
-def test_upload_model_missing_data(mock_get_metrics, client):
+def test_upload_model_missing_data(client, get_metric_value):
     """필수 데이터 누락 테스트"""
     mock_metrics = MagicMock()
-    mock_get_metrics.return_value = mock_metrics
 
     response = client.post('/upload_model')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Model file and hash are required'
     
-    mock_metrics.increment_error_count.assert_called_with('upload_model_missing_data')
+    counter_value = get_metric_value('errors', {'type': 'upload_model_missing_data'})
+    assert counter_value == 1

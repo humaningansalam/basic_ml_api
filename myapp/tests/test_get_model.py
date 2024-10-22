@@ -14,28 +14,26 @@ def test_get_model_success(mock_time, client):
     assert response.status_code == 200
     assert response.json['message']['file_path'] == test_metadata['file_path']
 
-@patch('myapp.common.prometheus_metric.get_metrics')
-def test_get_model_missing_hash(mock_get_metrics, client):
+def test_get_model_missing_hash(client, get_metric_value):
     """해시 파라미터 누락 테스트"""
     mock_metrics = MagicMock()
-    mock_get_metrics.return_value = mock_metrics
 
     response = client.get('/get_model')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Model hash is required'
     
-    mock_metrics.increment_error_count.assert_called_with('get_model_missing_hash')
+    counter_value = get_metric_value('errors', {'type': 'get_model_missing_hash'})
+    assert counter_value == 1
 
-@patch('myapp.common.prometheus_metric.get_metrics')
-def test_get_model_not_found(mock_get_metrics, client):
+def test_get_model_not_found(client, get_metric_value):
     """존재하지 않는 모델 조회 테스트"""
     mock_metrics = MagicMock()
-    mock_get_metrics.return_value = mock_metrics
 
     response = client.get('/get_model?hash=nonexistent')
     
     assert response.status_code == 404
     assert response.json['error'] == 'No such model'
     
-    mock_metrics.increment_error_count.assert_called_with('get_model_not_found')
+    counter_value = get_metric_value('errors', {'type': 'get_model_not_found'})
+    assert counter_value == 1
