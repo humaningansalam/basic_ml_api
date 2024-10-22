@@ -4,7 +4,6 @@ import logging
 from zipfile import ZipFile
 from collections import OrderedDict
 import numpy as np
-import keras
 from typing import Dict, Any, Optional, Tuple
 
 from myapp.common.prometheus_metric import get_metrics
@@ -18,7 +17,7 @@ class ModelManager:
         self.model_cache = OrderedDict()
         self.metrics = get_metrics()
         self.load_metadata_store()
-        
+
     def load_metadata_store(self) -> None:
         """메타데이터 저장소 초기화"""
         if not os.path.exists(self.store_path):
@@ -54,53 +53,34 @@ class ModelManager:
 
     def load_model_to_cache(self, model_hash: str) -> Optional[Any]:
         """모델을 캐시에 로드하고 반환하는 함수"""
-        try:
-            if model_hash in self.model_cache:
-                self.model_cache.move_to_end(model_hash)
-                return self.model_cache[model_hash]
+        if model_hash in self.model_cache:
+            self.model_cache.move_to_end(model_hash)
+            return self.model_cache[model_hash]
                 
-            if len(self.model_cache) >= self.max_cache_size:
-                oldest_key, _ = self.model_cache.popitem(last=False)
-                logging.info(f"Removing oldest model from cache: {oldest_key}")
-            
-            if model_hash not in self.metadata_store:
-                raise KeyError(f"Model hash {model_hash} not found in metadata store")
-                
-            model_file_path = self.metadata_store[model_hash]['file_path']
-            if not os.path.exists(model_file_path):
-                raise OSError(f"Model path does not exist: {model_file_path}")
-                
-            model = keras.models.load_model(model_file_path)
-            self.model_cache[model_hash] = model
-            self.metrics.set_model_cache_usage(len(self.model_cache))
-            logging.info(f"Model {model_hash} loaded into cache successfully")
-            return model
-            
-        except (OSError, KeyError) as e:
-            logging.error(f"Failed to load model: {str(e)}")
-            raise
-            
-        except Exception as e:
-            logging.error(f"Unexpected error loading model: {str(e)}")
-            raise
+        if len(self.model_cache) >= self.max_cache_size:
+            oldest_key, _ = self.model_cache.popitem(last=False)
+            logging.info(f"Removing oldest model from cache: {oldest_key}")
+
+        if model_hash not in self.metadata_store:
+            raise KeyError(f"Model hash {model_hash} not found in metadata store")
+
+        model_file_path = self.metadata_store[model_hash]['file_path']
+        if not os.path.exists(model_file_path):
+            raise OSError(f"Model path does not exist: {model_file_path}")
+
+        model = keras.models.load_model(model_file_path)
+        self.model_cache[model_hash] = model
+        self.metrics.set_model_cache_usage(len(self.model_cache))
+        logging.info(f"Model {model_hash} loaded into cache successfully")
+        return model
 
     def predict(self, model_hash: str, data: np.ndarray) -> Tuple[np.ndarray, int]:
         """예측 수행 함수"""
         try:
-            if model_hash not in self.metadata_store:
-                raise KeyError("Model not found in metadata store")
-
-            if model_hash in self.model_cache:
-                self.metrics.increment_cache_hit()
-                model = self.model_cache[model_hash]
-            else:
-                self.metrics.increment_cache_miss()
-                model = self.load_model_to_cache(model_hash)
-
+            model = self.load_model_to_cache(model_hash)
             self.metadata_store[model_hash]['used'] = tool_util.get_kr_time()
             prediction = model.predict(data)
             self.metrics.increment_predictions_completed()
-            
             return prediction, 200
 
         except (KeyError, OSError) as e:
@@ -118,27 +98,31 @@ class ModelManager:
         try:
             model_folder_path = os.path.join(self.store_path, model_hash)
             os.makedirs(model_folder_path, exist_ok=True)
-            
+
             model_file_path = os.path.join(model_folder_path, model_file.filename)
             model_file.save(model_file_path)
-            
+
             with ZipFile(model_file_path, 'r') as zipObj:
                 zipObj.extractall(model_folder_path)
-            
+
             os.remove(model_file_path)
-            
+
             self.metadata_store[model_hash] = {
                 'file_path': model_folder_path,
                 'used': tool_util.get_kr_time()
             }
-            
-            # 새로 업로드된 모델을 캐시에 로드
+
             self.load_model_to_cache(model_hash)
-            
             return 'File uploaded and processed successfully', 200
-            
+
         except Exception as e:
             self.metrics.increment_error_count('upload_model_error')
             if os.path.exists(model_folder_path):
                 shutil.rmtree(model_folder_path)
             raise
+
+    def get_model_info(self, model_hash: str) -> Dict[str, str]:
+        """모델 정보 반환"""
+        if model_hash not in self.metadata_store:
+            raise KeyError(f"Model {model_hash} not found")
+        return self.metadata_store[model_hash]
