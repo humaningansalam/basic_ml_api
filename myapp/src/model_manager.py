@@ -78,12 +78,10 @@ class ModelManager:
             
         except (OSError, KeyError) as e:
             logging.error(f"Failed to load model: {str(e)}")
-            self.metrics.increment_error_count('load_model_error')
             raise
             
         except Exception as e:
             logging.error(f"Unexpected error loading model: {str(e)}")
-            self.metrics.increment_error_count('load_model_error')
             raise
 
     def predict(self, model_hash: str, data: np.ndarray) -> Tuple[np.ndarray, int]:
