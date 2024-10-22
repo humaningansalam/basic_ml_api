@@ -104,11 +104,12 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
         cleanup_thread = threading.Thread(target=scheduled_cleanup, daemon=True)
         cleanup_thread.start()
 
-    # 리소스 모니터링 및 정리 스케줄러 시작
-    with ThreadPoolExecutor() as executor:
-        executor.submit(start_cleanup_scheduler)
-        resource_monitor = ResourceMonitor()
-        executor.submit(resource_monitor.start_monitor)
+    if not app.testing:
+        # 리소스 모니터링 및 정리 스케줄러 시작
+        with ThreadPoolExecutor() as executor:
+            executor.submit(start_cleanup_scheduler)
+            resource_monitor = ResourceMonitor()
+            executor.submit(resource_monitor.start_monitor)
 
     return app
 
