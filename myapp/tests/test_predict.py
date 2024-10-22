@@ -12,7 +12,7 @@ def test_predict_success(mock_time, mock_keras_load, client, get_counter_value):
     mock_keras_load.return_value = mock_model  # keras.models.load_model이 모킹된 모델을 반환하도록 설정
 
     # 메타데이터 설정
-    client.application.metadata_store['testhash123'] = {
+    client.application.model_manager.metadata_store['testhash123'] = {
         'file_path': '../data/model_testhash123',
         'used': '2024-04-27T12:00:00'
     }
@@ -48,7 +48,7 @@ def test_predict_missing_data(mock_time, client, get_counter_value):
 
 def test_predict_model_load_failed(client, get_counter_value):
     # 사전 메타데이터 설정
-    client.application.metadata_store['testhash123'] = {
+    client.application.model_manager.metadata_store['testhash123'] = {
         'file_path': '../data/non_existent_model',
         'used': '2024-04-27T12:00:00'
     }

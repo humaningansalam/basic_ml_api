@@ -4,7 +4,7 @@ from unittest.mock import patch
 @patch('myapp.src.main.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
 def test_get_model_success(mock_time, client):
     # 사전 메타데이터 설정
-    client.application.metadata_store['testhash123'] = {
+    client.application.model_manager.metadata_store['testhash123'] = {
         'file_path': '../data/model_testhash123',
         'used': '2024-04-27T12:00:00'
     }
