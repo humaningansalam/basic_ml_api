@@ -12,8 +12,6 @@ def test_predict_success(mock_load_model, mock_exists, client, get_metric_value)
     mock_model.predict.return_value = np.array([[0.8, 0.2]])
     mock_load_model.return_value = mock_model
 
-    mock_metrics = MagicMock()
-
     test_metadata = {
         'file_path': '../data/model_/testhash123',
         'used': '2024-04-27T12:00:00'
@@ -36,7 +34,7 @@ def test_predict_missing_data(client, get_metric_value):
     mock_metrics = MagicMock()
 
     # 데이터 없이 해시만 보내는 케이스
-    response = client.post('/predict?hash=testhash123', data='')
+    response = client.post('/predict?hash=testhash123', json={})
     
     assert response.status_code == 400
     assert response.json['error'] == 'Data is required'
