@@ -14,7 +14,7 @@ def test_get_model_success(mock_time, client):
     assert response.status_code == 200
     assert response.json['message']['file_path'] == test_metadata['file_path']
 
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_get_model_missing_hash(mock_get_metrics, client):
     """해시 파라미터 누락 테스트"""
     mock_metrics = MagicMock()
@@ -27,7 +27,7 @@ def test_get_model_missing_hash(mock_get_metrics, client):
     
     mock_metrics.increment_error_count.assert_called_with('get_model_missing_hash')
 
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_get_model_not_found(mock_get_metrics, client):
     """존재하지 않는 모델 조회 테스트"""
     mock_metrics = MagicMock()

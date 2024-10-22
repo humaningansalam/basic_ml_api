@@ -13,7 +13,7 @@ def create_test_model_zip():
     return memory_file
 
 @patch('keras.models.load_model')
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_upload_model_success(mock_get_metrics, mock_load_model, client):
     """모델 업로드 성공 테스트"""
     # 테스트 설정
@@ -33,7 +33,7 @@ def test_upload_model_success(mock_get_metrics, mock_load_model, client):
     assert response.json['message'] == 'File uploaded and processed successfully'
     assert 'testhash123' in client.application.model_manager.metadata_store
 
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_upload_model_missing_data(mock_get_metrics, client):
     """필수 데이터 누락 테스트"""
     mock_metrics = MagicMock()

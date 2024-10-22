@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 @patch('myapp.src.model_manager.os.path.exists')
 @patch('keras.models.load_model')
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_predict_success(mock_get_metrics, mock_load_model, mock_exists, client):
     """예측 성공 테스트"""
     # 설정
@@ -32,7 +32,7 @@ def test_predict_success(mock_get_metrics, mock_load_model, mock_exists, client)
     mock_metrics.increment_predictions_completed.assert_called_once()
     mock_metrics.increment_cache_misses.assert_called_once()
 
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_predict_missing_data(mock_get_metrics, client):
     """데이터 누락 테스트"""
     mock_metrics = MagicMock()
@@ -46,7 +46,7 @@ def test_predict_missing_data(mock_get_metrics, client):
 
     mock_metrics.increment_error_count.assert_called_with('predict_missing_data')
 
-@patch('myapp.src.main.get_metrics')
+@patch('myapp.common.prometheus_metric.get_metrics')
 def test_predict_model_not_found(mock_get_metrics, client):
     """존재하지 않는 모델로 예측 시도 테스트"""
     mock_metrics = MagicMock()
