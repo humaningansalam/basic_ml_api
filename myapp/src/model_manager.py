@@ -7,7 +7,6 @@ import keras
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 
-from myapp.common.prometheus_metric import get_metrics
 import myapp.common.tool_util as tool_util
 
 class ModelManager:
@@ -16,7 +15,6 @@ class ModelManager:
         self.max_cache_size = max_cache_size
         self.metadata_store: Dict[str, Dict[str, str]] = {}
         self.model_cache = OrderedDict()
-        self.metrics = get_metrics()
         self.load_metadata_store()
 
     def load_metadata_store(self) -> None:
@@ -49,8 +47,6 @@ class ModelManager:
             
             if model_hash in self.model_cache:
                 del self.model_cache[model_hash]
-                
-        self.metrics.set_model_cache_usage(len(self.model_cache))
 
     def load_model_to_cache(self, model_hash: str) -> Optional[Any]:
         """모델을 캐시에 로드하고 반환하는 함수"""
@@ -71,7 +67,6 @@ class ModelManager:
 
         model = keras.models.load_model(model_file_path)
         self.model_cache[model_hash] = model
-        self.metrics.set_model_cache_usage(len(self.model_cache))
         logging.info(f"Model {model_hash} loaded into cache successfully")
         return model
 
@@ -81,16 +76,13 @@ class ModelManager:
             model = self.load_model_to_cache(model_hash)
             self.metadata_store[model_hash]['used'] = tool_util.get_kr_time()
             prediction = model.predict(data)
-            self.metrics.increment_predictions_completed()
             return prediction, 200
 
         except (KeyError, OSError) as e:
-            self.metrics.increment_error_count('predict_model_load_failed')
             logging.error(f"Model loading failed: {str(e)}")
             raise
 
         except Exception as e:
-            self.metrics.increment_error_count('predict_error')
             logging.error(f"Prediction failed: {str(e)}")
             raise
 
@@ -117,7 +109,7 @@ class ModelManager:
             return 'File uploaded and processed successfully', 200
 
         except Exception as e:
-            self.metrics.increment_error_count('upload_model_error')
+            logging.error(f"Error uploading model: {e}")
             if os.path.exists(model_folder_path):
                 shutil.rmtree(model_folder_path)
             raise
