@@ -30,7 +30,8 @@ def test_predict_success(mock_load_model, mock_exists, client, get_metric_value)
     
 def test_predict_missing_data(client, get_metric_value):
     """데이터 누락 테스트"""
-    response = client.post('/predict?hash=testhash123')
+    # 데이터 없이 해시만 보내는 케이스
+    response = client.post('/predict?hash=testhash123', data='')
     
     assert response.status_code == 400
     assert response.json['error'] == 'Data and Model hash are required'
