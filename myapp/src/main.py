@@ -8,7 +8,7 @@ from collections import OrderedDict
 import numpy as np
 import keras
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, current_app
 from prometheus_client import generate_latest
 
 from myapp.src.model_manager import ModelManager
@@ -35,10 +35,10 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
             model_hash = request.args.get('hash')
 
             if not model_file or not model_hash:
-                model_manager.metrics.increment_error_count('upload_model_missing_data')
+                current_app.model_manager.metrics.increment_error_count('upload_model_missing_data')
                 return jsonify({'error': 'Model file and hash are required'}), 400
 
-            message, status_code = model_manager.upload_model(model_file, model_hash)
+            message, status_code = current_app.model_manager.upload_model(model_file, model_hash)
             return jsonify({'message': message}), status_code
 
         except Exception as e:
@@ -50,14 +50,14 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
         model_hash = request.args.get('hash')
 
         if not model_hash:
-            model_manager.metrics.increment_error_count('get_model_missing_hash')
+            current_app.model_manager.metrics.increment_error_count('get_model_missing_hash')
             return jsonify({'error': 'Model hash is required'}), 400
 
-        if model_hash not in model_manager.metadata_store:
-            model_manager.metrics.increment_error_count('get_model_not_found')
+        if model_hash not in current_app.model_manager.metadata_store:
+            current_app.model_manager.metrics.increment_error_count('get_model_not_found')
             return jsonify({'message': 'No such model'}), 404
 
-        return jsonify({'message': model_manager.metadata_store[model_hash]}), 200
+        return jsonify({'message': current_app.model_manager.metadata_store[model_hash]}), 200
 
     @app.route('/predict', methods=['POST'])
     def predict():
@@ -67,10 +67,10 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
             model_hash = request.args.get('hash')
 
             if not data or not model_hash:
-                model_manager.metrics.increment_error_count('predict_missing_data')
+                current_app.model_manager.metrics.increment_error_count('predict_missing_data')
                 return jsonify({'error': 'Data and Model hash are required'}), 400
 
-            prediction, status_code = model_manager.predict(model_hash, np.array(data))
+            prediction, status_code = current_app.model_manager.predict(model_hash, np.array(data))
             return jsonify({'prediction': prediction.tolist()}), status_code
 
         except KeyError as e:
@@ -98,7 +98,7 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
         """주기적인 모델 정리 스케줄러"""
         def scheduled_cleanup():
             while True:
-                model_manager.clean_old_models()
+                current_app.model_manager.clean_old_models()
                 tool_util.delay_h(5)  # 5시간 대기
         
         cleanup_thread = threading.Thread(target=scheduled_cleanup, daemon=True)
