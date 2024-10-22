@@ -75,10 +75,7 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
 
         except KeyError as e:
             return jsonify({'error': str(e)}), 404
-        
-        except OSError as e:
-            return jsonify({'error': 'Model file not found'}), 500
-        
+            
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
