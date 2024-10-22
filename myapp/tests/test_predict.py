@@ -58,4 +58,4 @@ def test_predict_model_not_found(mock_get_metrics, client):
     assert response.status_code == 404
     assert 'error' in response.json
 
-    mock_metrics.increment_error_count.assert_called_with('predict_model_load_failed')
+    mock_metrics.increment_error_count.assert_called_with('predict_model_not_found')
