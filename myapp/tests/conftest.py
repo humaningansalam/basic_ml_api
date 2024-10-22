@@ -9,7 +9,7 @@ def app():
     """테스트용 Flask 애플리케이션을 반환하는 fixture"""
     app = create_app()
     app.testing = True # 테스트 모드로 설정하여 백그라운드 작업 비활성화
-    return create_app() 
+    return app
 
 @pytest.fixture
 def client(app):
