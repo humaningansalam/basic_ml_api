@@ -1,12 +1,12 @@
 import pytest
 from prometheus_client import REGISTRY
 
-from myapp.src.main import app as flask_app
+from myapp.src.main import create_app
 
 @pytest.fixture
 def app():
-    """Flask 애플리케이션을 반환하는 fixture"""
-    return flask_app
+    """테스트용 Flask 애플리케이션을 반환하는 fixture"""
+    return create_app() 
 
 @pytest.fixture
 def client(app):
