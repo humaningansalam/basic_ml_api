@@ -36,5 +36,5 @@ def test_upload_model_missing_data(client, get_metric_value):
     assert response.status_code == 400
     assert response.json['error'] == 'Model file and hash are required'
     
-    error_count = get_metric_value('errors_total', {'type': 'upload_model_missing_data'})
+    error_count = get_metric_value('errors', {'type': 'upload_model_missing_data'})
     assert error_count == 1

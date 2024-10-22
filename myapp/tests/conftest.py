@@ -7,8 +7,7 @@ from myapp.src.main import create_app
 @pytest.fixture
 def app():
     """테스트용 Flask 애플리케이션을 반환하는 fixture"""
-    test_model_path = os.path.join(os.path.dirname(__file__), "../data/test_model_")
-    app = create_app(model_store_path=test_model_path)
+    app = create_app()
     app.testing = True # 테스트 모드로 설정하여 백그라운드 작업 비활성화
     return create_app() 
 

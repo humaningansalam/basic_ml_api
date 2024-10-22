@@ -11,7 +11,7 @@ def test_predict_success(mock_load_model, client, get_metric_value):
     mock_load_model.return_value = mock_model
     
     test_metadata = {
-        'file_path': '../data/test_model_/testhash123',
+        'file_path': '../data/model_/testhash123',
         'used': '2024-04-27T12:00:00'
     }
     client.application.model_manager.metadata_store['testhash123'] = test_metadata
@@ -34,7 +34,7 @@ def test_predict_missing_data(client, get_metric_value):
     assert response.status_code == 400
     assert response.json['error'] == 'Data and Model hash are required'
     
-    error_count = get_metric_value('errors_total', {'type': 'predict_missing_data'})
+    error_count = get_metric_value('errors', {'type': 'predict_missing_data'})
     assert error_count == 1
 
 def test_predict_model_not_found(client, get_metric_value):
@@ -45,5 +45,5 @@ def test_predict_model_not_found(client, get_metric_value):
     assert response.status_code == 404
     assert 'error' in response.json
     
-    error_count = get_metric_value('errors_total', {'type': 'predict_model_load_failed'})
+    error_count = get_metric_value('errors', {'type': 'predict_model_load_failed'})
     assert error_count == 1
