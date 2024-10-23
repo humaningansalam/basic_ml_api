@@ -23,7 +23,7 @@ jobs:
       run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
 
     - name: Run Tests with Docker
-      run: docker run --name myapp-container --rm myapp:${{ env.VERSION }} pytest --disable-warnings -v
+      run: docker run --name myapp-container myapp:${{ env.VERSION }} pytest --disable-warnings -v
 
     - name: Tests logs 
       run: |
