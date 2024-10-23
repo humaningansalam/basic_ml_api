@@ -106,10 +106,10 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
 
     if not app.testing:
         # 리소스 모니터링 및 정리 스케줄러 시작
-        with ThreadPoolExecutor() as executor:
-            executor.submit(start_cleanup_scheduler)
-            resource_monitor = ResourceMonitor()
-            executor.submit(resource_monitor.start_monitor)
+        start_cleanup_scheduler()
+
+        resource_monitor = ResourceMonitor()
+        resource_monitor.start_monitor()
 
     return app
 
