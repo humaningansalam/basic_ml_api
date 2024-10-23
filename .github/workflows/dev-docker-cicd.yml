@@ -46,6 +46,12 @@ jobs:
       run: |
           docker exec myapp-container pytest --disable-warnings -v
           docker logs myapp-container 
+      
+    - name: Stop and Remove Docker container
+      if: always()
+      run: |
+          docker stop myapp-container
+          docker rm myapp-container
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
