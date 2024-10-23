@@ -22,36 +22,15 @@ jobs:
     - name: Build Docker image
       run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
 
-    - name: Run Docker container
-      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ env.VERSION }}
+    - name: Run Tests with Docker
+      run: docker run --name myapp-container --rm myapp:${{ env.VERSION }} pytest --disable-warnings -v
 
-    - name: health check
-      run: |
-          for i in {0..6}; do
-            curl -f http://localhost:5000/health && exit 0
-            echo "Attempt $i failed, waiting 9 seconds..."
-            sleep 9
-          done
-          exit 1
-
-    - name: Show Docker logs 
-      if: failure()
+    - name: Tests logs 
       run: |
           echo "=== Docker Container Status ==="
           docker ps -a
           echo "=== Docker Container Logs ==="
           docker logs myapp-container
-
-    - name: Run Tests
-      run: |
-          docker exec myapp-container pytest --disable-warnings -v
-          docker logs myapp-container 
-      
-    - name: Stop and Remove Docker container
-      if: always()
-      run: |
-          docker stop myapp-container
-          docker rm myapp-container
 
     - name: action-slack
       uses: 8398a7/action-slack@v3
