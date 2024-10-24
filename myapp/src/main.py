@@ -93,24 +93,19 @@ def create_app(model_store_path: str = "../data/model_") -> Flask:
         """헬스체크 엔드포인트"""
         return "Healthy"
 
-    def start_cleanup_scheduler():
-        """주기적인 모델 정리 스케줄러"""
-        def scheduled_cleanup():
-            while True:
-                current_app.model_manager.clean_old_models()
-                tool_util.delay_h(5)  # 5시간 대기
-
-        cleanup_thread = threading.Thread(target=scheduled_cleanup, daemon=True)
-        cleanup_thread.start()
-
-    if not app.testing:
-        # 리소스 모니터링 및 정리 스케줄러 시작
-        start_cleanup_scheduler()
-
-        resource_monitor = ResourceMonitor()
-        resource_monitor.start_monitor()
-
     return app
+
+def start_cleanup_scheduler():
+    """주기적인 모델 정리 스케줄러"""
+    def scheduled_cleanup():
+        while True:
+            current_app.model_manager.clean_old_models()
+            tool_util.delay_h(5)  # 5시간 대기
+
+    cleanup_thread = threading.Thread(target=scheduled_cleanup, daemon=True)
+    cleanup_thread.start()
+
+
 
 if __name__ == '__main__':
     log_level = os.getenv('LOG_LEVEL', 'DEBUG')
@@ -118,4 +113,9 @@ if __name__ == '__main__':
     tool_util.set_folder()
 
     app = create_app()
+
+    start_cleanup_scheduler()
+    resource_monitor = ResourceMonitor()
+    resource_monitor.start_monitor()
+    
     app.run(host='0.0.0.0', port=5000)
