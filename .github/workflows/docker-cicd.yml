@@ -22,10 +22,10 @@ jobs:
       uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
+      run: docker build -t myapp:${{ steps.get_version.outputs.VERSION }} -f Dockerfile .
 
     - name: Run Docker container
-      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ env.VERSION }}
+      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ steps.get_version.outputs.VERSION }}
 
     - name: health check
       run: |
