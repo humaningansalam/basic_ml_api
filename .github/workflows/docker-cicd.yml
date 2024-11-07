@@ -11,6 +11,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+
     steps:
     - uses: actions/checkout@v3
 
@@ -81,7 +84,7 @@ jobs:
         script: |
           cd ~/docker/basic_ml_api
           echo "LOG_LEVEL=${{ vars.LOG_LEVEL }}" > .env
-          echo "VERSION=${{ steps.get_version.outputs.VERSION }}" >> .env
+          echo "VERSION=${{ needs.build.outputs.version }}" >> .env
           docker compose down --rmi all
           docker compose build --no-cache
           docker compose up -d
