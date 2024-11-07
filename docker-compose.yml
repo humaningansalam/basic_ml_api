@@ -7,6 +7,7 @@ services:
           VERSION: ${VERSION}
         tags:
           - "badic_ml_api:${VERSION}"
+      image: badic_ml_api:${VERSION}
       container_name: basic_ml_api
       restart: unless-stopped
       volumes:
