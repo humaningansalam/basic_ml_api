@@ -1,13 +1,13 @@
 version:  '3'
 services:
-  badic_ml_api:
+  basic_ml_api:
       build: 
         context: .
         args:
           VERSION: ${VERSION}
         tags:
-          - "badic_ml_api:${VERSION}"
-      image: badic_ml_api:${VERSION}
+          - "basic_ml_api:${VERSION}"
+      image: basic_ml_api:${VERSION}
       container_name: basic_ml_api
       restart: unless-stopped
       volumes:
