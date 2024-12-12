@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "basic-ml-api"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["sanghun9634"]
 readme = "README.md"
@@ -14,7 +14,7 @@ prometheus-client = "^0.21.0"
 pytest = "^8.3.3"
 pytest-flask = "^1.3.0"
 pytest-mock = "^3.14.0"
-tensorflow = "2.15.0"
+tensorflow = "==2.15.*"
 
 
 [build-system]
