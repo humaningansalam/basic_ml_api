@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
-RUN poetry add numpy
+RUN pip install numpy
 
 # 설치된 패키지 확인
 RUN pip list
