@@ -6,6 +6,7 @@ from collections import OrderedDict
 import keras
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
+from tensorflow.keras.models import load_model
 
 import myapp.common.tool_util as tool_util
 
