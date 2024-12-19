@@ -3,14 +3,23 @@ import zipfile
 from unittest.mock import patch, MagicMock
 
 def create_test_model_zip():
-    """테스트용 모델 ZIP 파일 생성"""
+    """테스트용 .keras 모델 ZIP 파일 생성"""
+    # 간단한 Keras 모델 생성
+    model = Sequential([Dense(1, input_shape=(2,))])
+    model.compile(optimizer='adam', loss='mse')
+
+    # 메모리 상에서 .keras 파일 저장
     memory_file = io.BytesIO()
-    with zipfile.ZipFile(memory_file, 'w') as zf:
-        zf.writestr('saved_model.pb', b'dummy model content')
-        zf.writestr('variables/variables.data-00000-of-00001', b'dummy variables')
-        zf.writestr('variables/variables.index', b'dummy index')
+    model.save(memory_file, save_format='keras')
     memory_file.seek(0)
-    return memory_file
+
+    # .zip 파일로 압축
+    zip_memory_file = io.BytesIO()
+    with zipfile.ZipFile(zip_memory_file, 'w') as zf:
+        zf.writestr('model.keras', memory_file.read())
+    zip_memory_file.seek(0)
+
+    return zip_memory_file
 
 @patch('keras.models.load_model')
 @patch('myapp.common.prometheus_metric.get_metrics')
@@ -21,17 +30,14 @@ def test_upload_model_success(mock_get_metrics, mock_load_model, client):
     mock_metrics = MagicMock()
     mock_get_metrics.return_value = mock_metrics
 
-    # .keras 파일 생성
-    model_path = '../data/model_/testhash123.keras'
-    with open(model_path, 'wb') as f:
-        f.write(b'Mock Keras Model')  # Mock 데이터
-
+    # .keras ZIP 파일 생성
+    test_zip = create_test_model_zip()
+    
     # 테스트 실행
-    with open(model_path, 'rb') as test_model_file:
-        response = client.post('/upload_model?hash=testhash123',
-                               data={'model_file': (test_model_file, 'model.keras')},
-                               content_type='multipart/form-data')
-
+    response = client.post('/upload_model?hash=testhash123',
+                           data={'model_file': (test_zip, 'model.zip')},
+                           content_type='multipart/form-data')
+    
     # 검증
     assert response.status_code == 200
     assert response.json['message'] == 'File uploaded and processed successfully'
