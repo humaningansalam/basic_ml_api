@@ -1,9 +1,10 @@
 import os
 import shutil
 import logging
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 from collections import OrderedDict
-import keras
+import tensorflow as tf
+from tensorflow import keras
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 
@@ -26,6 +27,7 @@ class ModelManager:
         for model_hash in os.listdir(self.store_path):
             model_folder_path = os.path.join(self.store_path, model_hash)
             if os.path.isdir(model_folder_path):
+                # 폴더 경로를 메타데이터에 저장 (기존 방식 유지)
                 self.metadata_store[model_hash] = {
                     'file_path': model_folder_path,
                     'used': tool_util.get_kr_time()
@@ -37,14 +39,14 @@ class ModelManager:
         for model_hash, metadata in self.metadata_store.items():
             if metadata['used'] < tool_util.one_week_ago():
                 to_remove.append(model_hash)
-                
+
         for model_hash in to_remove:
-            remove_path = self.metadata_store[model_hash]['file_path']
+            remove_path = os.path.join(self.store_path, model_hash)
             if os.path.exists(remove_path):
                 shutil.rmtree(remove_path)
                 logging.info(f"Removed old model: {model_hash}")
             del self.metadata_store[model_hash]
-            
+
             if model_hash in self.model_cache:
                 del self.model_cache[model_hash]
 
@@ -53,7 +55,7 @@ class ModelManager:
         if model_hash in self.model_cache:
             self.model_cache.move_to_end(model_hash)
             return self.model_cache[model_hash]
-                
+
         if len(self.model_cache) >= self.max_cache_size:
             oldest_key, _ = self.model_cache.popitem(last=False)
             logging.info(f"Removing oldest model from cache: {oldest_key}")
@@ -61,13 +63,27 @@ class ModelManager:
         if model_hash not in self.metadata_store:
             raise KeyError(f"Model hash {model_hash} not found in metadata store")
 
-        model_file_path = self.metadata_store[model_hash]['file_path']
-        if not os.path.exists(model_file_path):
-            raise OSError(f"Model path does not exist: {model_file_path}")
+        model_folder_path = self.metadata_store[model_hash]['file_path']
+        if not os.path.exists(model_folder_path):
+            raise OSError(f"Model path does not exist: {model_folder_path}")
 
-        model = keras.models.load_model(model_file_path)
+        # .keras 파일 경로 확인
+        keras_file_path = None
+        for root, _, files in os.walk(model_folder_path):
+            for file in files:
+                if file.endswith(".keras"):
+                    keras_file_path = os.path.join(root, file)
+                    break
+            if keras_file_path:
+                break
+
+        if keras_file_path is None:
+            raise OSError(f"No .keras file found in model folder: {model_folder_path}")
+
+        # .keras 파일 로드
+        model = tf.keras.models.load_model(keras_file_path)
         self.model_cache[model_hash] = model
-        logging.info(f"Model {model_hash} loaded into cache successfully")
+        logging.info(f"Model {model_hash} loaded into cache successfully from .keras file")
         return model
 
     def predict(self, model_hash: str, data: np.ndarray) -> Tuple[np.ndarray, int]:
@@ -88,31 +104,43 @@ class ModelManager:
 
     def upload_model(self, model_file, model_hash: str) -> Tuple[str, int]:
         """모델 업로드 및 저장"""
+        model_folder_path = os.path.join(self.store_path, model_hash)
+        os.makedirs(model_folder_path, exist_ok=True)
+
+        temp_zip_path = os.path.join(model_folder_path, 'temp.zip')
+        model_file.save(temp_zip_path)
+
         try:
-            model_folder_path = os.path.join(self.store_path, model_hash)
-            os.makedirs(model_folder_path, exist_ok=True)
+            with ZipFile(temp_zip_path, 'r') as zip_ref:
+                keras_file_found = False
+                for name in zip_ref.namelist():
+                    if name.endswith('.keras'):
+                        keras_file_found = True
+                        break
+                if not keras_file_found:
+                    raise ValueError("No .keras file found in the zip archive.")
+                # .zip 파일 압축 해제 (기존 방식 유지)
+                zip_ref.extractall(model_folder_path)
 
-            model_file_path = os.path.join(model_folder_path, model_file.filename)
-            model_file.save(model_file_path)
-
-            with ZipFile(model_file_path, 'r') as zipObj:
-                zipObj.extractall(model_folder_path)
-
-            os.remove(model_file_path)
-
-            self.metadata_store[model_hash] = {
-                'file_path': model_folder_path,
-                'used': tool_util.get_kr_time()
-            }
-
-            self.load_model_to_cache(model_hash)
-            return 'File uploaded and processed successfully', 200
+        except BadZipFile:
+            logging.error("Bad zip file uploaded.")
+            raise ValueError("Invalid zip file uploaded.")
 
         except Exception as e:
-            logging.error(f"Error uploading model: {e}")
-            if os.path.exists(model_folder_path):
-                shutil.rmtree(model_folder_path)
+            logging.error(f"Error extracting .keras file: {e}")
             raise
+
+        finally:
+            if os.path.exists(temp_zip_path):
+                os.remove(temp_zip_path)
+
+        # 메타데이터 업데이트 (기존 방식 유지)
+        self.metadata_store[model_hash] = {
+            'file_path': model_folder_path,
+            'used': tool_util.get_kr_time()
+        }
+
+        return 'File uploaded and processed successfully', 200
 
     def get_model_info(self, model_hash: str) -> Dict[str, str]:
         """모델 정보 반환"""

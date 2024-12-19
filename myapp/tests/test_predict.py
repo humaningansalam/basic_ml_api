@@ -3,14 +3,18 @@ from unittest.mock import patch, MagicMock
 from collections import OrderedDict
 
 @patch('myapp.src.model_manager.os.path.exists')
-@patch('keras.models.load_model')
-def test_predict_success(mock_load_model, mock_exists, client, get_metric_value):
+@patch('tensorflow.keras.models.load_model') 
+@patch('myapp.src.model_manager.os.walk') 
+def test_predict_success(mock_walk, mock_load_model, mock_exists, client, get_metric_value):
     """예측 성공 테스트"""
     # 설정
-    mock_exists.return_value = True  # os.path.exists가 항상 True를 반환하도록 Mock 처리
+    mock_exists.return_value = True
     mock_model = MagicMock()
     mock_model.predict.return_value = np.array([[0.8, 0.2]])
     mock_load_model.return_value = mock_model
+
+    # .keras 파일 경로 모킹
+    mock_walk.return_value = [('../data/model_/testhash123', [], ['model.keras'])]
 
     test_metadata = {
         'file_path': '../data/model_/testhash123',
