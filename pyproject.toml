@@ -7,6 +7,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "==3.10.*"
+<<<<<<< HEAD
+=======
+tensorflow = "==2.16.*"
+>>>>>>> dev
 Flask = "^3.0.2"
 psutil = "5.9.8"
 pytz = "^2024.2"
