@@ -21,13 +21,17 @@ def test_upload_model_success(mock_get_metrics, mock_load_model, client):
     mock_metrics = MagicMock()
     mock_get_metrics.return_value = mock_metrics
 
-    test_zip = create_test_model_zip()
-    
+    # .keras 파일 생성
+    model_path = '../data/model_/testhash123.keras'
+    with open(model_path, 'wb') as f:
+        f.write(b'Mock Keras Model')  # Mock 데이터
+
     # 테스트 실행
-    response = client.post('/upload_model?hash=testhash123',
-                         data={'model_file': (test_zip, 'model.zip')},
-                         content_type='multipart/form-data')
-    
+    with open(model_path, 'rb') as test_model_file:
+        response = client.post('/upload_model?hash=testhash123',
+                               data={'model_file': (test_model_file, 'model.keras')},
+                               content_type='multipart/form-data')
+
     # 검증
     assert response.status_code == 200
     assert response.json['message'] == 'File uploaded and processed successfully'

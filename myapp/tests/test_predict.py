@@ -13,7 +13,7 @@ def test_predict_success(mock_load_model, mock_exists, client, get_metric_value)
     mock_load_model.return_value = mock_model
 
     test_metadata = {
-        'file_path': '../data/model_/testhash123',
+        'file_path': '../data/model_/testhash123.keras',
         'used': '2024-04-27T12:00:00'
     }
     client.application.model_manager.metadata_store['testhash123'] = test_metadata
