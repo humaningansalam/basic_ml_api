@@ -18,6 +18,13 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+
+# 설치된 패키지 확인
+RUN pip list
+
+# numpy 설치 및 버전 확인
+RUN python -c "import numpy; print(numpy.__version__)"
+
 EXPOSE 5000
 
 # 시작 명령
