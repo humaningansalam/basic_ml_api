@@ -6,17 +6,14 @@ from collections import OrderedDict
 @patch('keras.models.load_model')
 def test_predict_success(mock_load_model, mock_exists, client, get_metric_value):
     """예측 성공 테스트"""
-    # 설정: os.path.exists가 항상 True를 반환하도록 Mock 처리
-    mock_exists.return_value = True
-
-    # Keras 모델의 Mock 생성
+    # 설정
+    mock_exists.return_value = True  # os.path.exists가 항상 True를 반환하도록 Mock 처리
     mock_model = MagicMock()
-    mock_model.predict.return_value = np.array([[0.8, 0.2]])  # Mock 예측 결과 설정
-    mock_load_model.return_value = mock_model  # load_model이 항상 Mock 모델을 반환
+    mock_model.predict.return_value = np.array([[0.8, 0.2]])
+    mock_load_model.return_value = mock_model
 
-    # 메타데이터 설정
     test_metadata = {
-        'file_path': '../data/model_/testhash123.keras',  # 가상의 .keras 파일 경로
+        'file_path': '../data/model_/testhash123',
         'used': '2024-04-27T12:00:00'
     }
     client.application.model_manager.metadata_store['testhash123'] = test_metadata
@@ -26,10 +23,9 @@ def test_predict_success(mock_load_model, mock_exists, client, get_metric_value)
     response = client.post('/predict?hash=testhash123', json=[[0.5, 0.5]])
 
     # 검증
-    assert response.status_code == 200  # HTTP 200 OK 응답 확인
-    assert response.json['prediction'] == [[0.8, 0.2]]  # Mock 예측 결과 확인
+    assert response.status_code == 200
+    assert response.json['prediction'] == [[0.8, 0.2]]
 
-    # 메트릭 검증
     counter_value = get_metric_value('predictions_completed')
     assert counter_value == 1
 
