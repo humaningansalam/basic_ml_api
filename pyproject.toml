@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "basic-ml-api"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["sanghun9634"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "==3.10.*"
-tensorflow = "2.15.0"
+tensorflow = "==2.16.*"
 Flask = "^3.0.2"
 psutil = "5.9.8"
 pytz = "^2024.2"
