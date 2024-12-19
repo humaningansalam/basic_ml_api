@@ -1,13 +1,4 @@
-import os
-import shutil
-import logging
-from zipfile import ZipFile
-from collections import OrderedDict
-import keras
-import numpy as np
-from typing import Dict, Any, Optional, Tuple
-
-import myapp.common.tool_util as tool_util
+from tensorflow.keras.models import load_model
 
 class ModelManager:
     def __init__(self, store_path: str, max_cache_size: int = 10):
@@ -24,10 +15,10 @@ class ModelManager:
             return
 
         for model_hash in os.listdir(self.store_path):
-            model_folder_path = os.path.join(self.store_path, model_hash)
-            if os.path.isdir(model_folder_path):
+            model_file_path = os.path.join(self.store_path, model_hash + '.keras')
+            if os.path.isfile(model_file_path):
                 self.metadata_store[model_hash] = {
-                    'file_path': model_folder_path,
+                    'file_path': model_file_path,
                     'used': tool_util.get_kr_time()
                 }
 
@@ -37,14 +28,14 @@ class ModelManager:
         for model_hash, metadata in self.metadata_store.items():
             if metadata['used'] < tool_util.one_week_ago():
                 to_remove.append(model_hash)
-                
+        
         for model_hash in to_remove:
             remove_path = self.metadata_store[model_hash]['file_path']
             if os.path.exists(remove_path):
-                shutil.rmtree(remove_path)
+                os.remove(remove_path)
                 logging.info(f"Removed old model: {model_hash}")
             del self.metadata_store[model_hash]
-            
+
             if model_hash in self.model_cache:
                 del self.model_cache[model_hash]
 
@@ -53,7 +44,7 @@ class ModelManager:
         if model_hash in self.model_cache:
             self.model_cache.move_to_end(model_hash)
             return self.model_cache[model_hash]
-                
+        
         if len(self.model_cache) >= self.max_cache_size:
             oldest_key, _ = self.model_cache.popitem(last=False)
             logging.info(f"Removing oldest model from cache: {oldest_key}")
@@ -65,10 +56,30 @@ class ModelManager:
         if not os.path.exists(model_file_path):
             raise OSError(f"Model path does not exist: {model_file_path}")
 
-        model = keras.models.load_model(model_file_path)
+        model = load_model(model_file_path)
         self.model_cache[model_hash] = model
         logging.info(f"Model {model_hash} loaded into cache successfully")
         return model
+
+    def upload_model(self, model_file, model_hash: str) -> Tuple[str, int]:
+        """모델 업로드 및 저장"""
+        try:
+            model_file_path = os.path.join(self.store_path, model_hash + '.keras')
+            model_file.save(model_file_path)
+
+            self.metadata_store[model_hash] = {
+                'file_path': model_file_path,
+                'used': tool_util.get_kr_time()
+            }
+
+            self.load_model_to_cache(model_hash)
+            return 'File uploaded and processed successfully', 200
+
+        except Exception as e:
+            logging.error(f"Error uploading model: {e}")
+            if os.path.exists(model_file_path):
+                os.remove(model_file_path)
+            raise
 
     def predict(self, model_hash: str, data: np.ndarray) -> Tuple[np.ndarray, int]:
         """예측 수행 함수"""
@@ -84,34 +95,6 @@ class ModelManager:
 
         except Exception as e:
             logging.error(f"Prediction failed: {str(e)}")
-            raise
-
-    def upload_model(self, model_file, model_hash: str) -> Tuple[str, int]:
-        """모델 업로드 및 저장"""
-        try:
-            model_folder_path = os.path.join(self.store_path, model_hash)
-            os.makedirs(model_folder_path, exist_ok=True)
-
-            model_file_path = os.path.join(model_folder_path, model_file.filename)
-            model_file.save(model_file_path)
-
-            with ZipFile(model_file_path, 'r') as zipObj:
-                zipObj.extractall(model_folder_path)
-
-            os.remove(model_file_path)
-
-            self.metadata_store[model_hash] = {
-                'file_path': model_folder_path,
-                'used': tool_util.get_kr_time()
-            }
-
-            self.load_model_to_cache(model_hash)
-            return 'File uploaded and processed successfully', 200
-
-        except Exception as e:
-            logging.error(f"Error uploading model: {e}")
-            if os.path.exists(model_folder_path):
-                shutil.rmtree(model_folder_path)
             raise
 
     def get_model_info(self, model_hash: str) -> Dict[str, str]:
