@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install numpy
 
+RUN poetry --version
+
 # 설치된 패키지 확인
 RUN pip list
 
