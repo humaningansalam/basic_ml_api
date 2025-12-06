@@ -5,11 +5,10 @@ def test_metrics_endpoint(client):
     
     metrics_data = response.data.decode('utf-8')
     
-    # 기본적인 메트릭이 포함되어 있는지 확인
     assert 'model_cache_usage' in metrics_data
     assert 'errors' in metrics_data
     assert 'predictions_completed' in metrics_data
-    assert 'cache_hits' in metrics_data
-    assert 'cache_misses' in metrics_data
+    assert 'cache_hits' in metrics_data     
+    assert 'cache_misses' in metrics_data    
     assert 'app_cpu_usage' in metrics_data
     assert 'app_ram_usage' in metrics_data

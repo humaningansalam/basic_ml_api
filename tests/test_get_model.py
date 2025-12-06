@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-@patch('myapp.src.model_manager.tool_util.get_kr_time', return_value='2024-04-27T12:00:00')
+@patch('src.core.model_manager.utils.get_kr_time', return_value='2024-04-27T12:00:00')
 def test_get_model_success(mock_time, client):
     """모델 조회 성공 테스트"""
     test_metadata = {
@@ -16,8 +16,6 @@ def test_get_model_success(mock_time, client):
 
 def test_get_model_missing_hash(client, get_metric_value):
     """해시 파라미터 누락 테스트"""
-    mock_metrics = MagicMock()
-
     response = client.get('/get_model')
     
     assert response.status_code == 400
@@ -28,8 +26,6 @@ def test_get_model_missing_hash(client, get_metric_value):
 
 def test_get_model_not_found(client, get_metric_value):
     """존재하지 않는 모델 조회 테스트"""
-    mock_metrics = MagicMock()
-
     response = client.get('/get_model?hash=nonexistent')
     
     assert response.status_code == 404

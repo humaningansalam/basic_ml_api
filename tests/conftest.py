@@ -1,25 +1,19 @@
-import os
 import pytest
 from prometheus_client import REGISTRY
 
-from myapp.src.main import create_app
+from src.main import create_app
 
 @pytest.fixture
 def app():
     """테스트용 Flask 애플리케이션을 반환하는 fixture"""
     app = create_app()
-    app.testing = True # 테스트 모드로 설정하여 백그라운드 작업 비활성화
+    app.testing = True # 테스트 모드 설정
     return app
 
 @pytest.fixture
 def client(app):
     """Flask 테스트 클라이언트를 반환하는 fixture"""
     return app.test_client()
-
-@pytest.fixture
-def runner(app):
-    """Flask CLI runner를 반환하는 fixture"""
-    return app.test_cli_runner()
 
 @pytest.fixture
 def get_metric_value():

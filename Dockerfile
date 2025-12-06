@@ -18,4 +18,4 @@ RUN apt-get update && apt-get install -y pkg-config libhdf5-dev gcc g++\
 EXPOSE 5000
 
 # 시작 명령
-CMD ["python3", "-m", "myapp.src.main"]
+CMD ["python3", "-m", "src.main"]

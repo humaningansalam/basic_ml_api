@@ -1,4 +1,5 @@
-from prometheus_client import Counter, Gauge, Histogram
+#common/metrics
+from prometheus_client import Counter, Gauge
 import threading
 
 class PMetrics:
@@ -19,20 +20,24 @@ class PMetrics:
 
     @classmethod
     def get_instance(cls):
+        """싱글톤 인스턴스 반환"""
         with cls._lock:
             if cls._instance is None:
                 cls._instance = PMetrics()
         return cls._instance
 
-    # MLApi metric methods
-    def set_model_cache_usage(self, value):
-        self.model_cache_usage.set(value)
-
+    # Metric 메서드들
     def increment_error_count(self, error_type):
         self.errors_count.labels(type=error_type).inc()
 
     def increment_predictions_completed(self):
         self.predictions_completed.inc()
+        
+    def set_app_cpu_usage(self, value):
+        self.app_cpu_usage.set(value)
+
+    def set_app_ram_usage(self, value):
+        self.app_ram_usage.set(value)
 
     def increment_cache_hit(self):
         self.cache_hits.inc()
@@ -40,12 +45,9 @@ class PMetrics:
     def increment_cache_miss(self):
         self.cache_misses.inc()
 
-    # Monitor metric methods
-    def set_app_cpu_usage(self, value):
-        self.app_cpu_usage.set(value)
-
-    def set_app_ram_usage(self, value):
-        self.app_ram_usage.set(value)
+    def set_model_cache_usage(self, value):
+        self.model_cache_usage.set(value)
 
 def get_metrics():
+    """메트릭스 인스턴스 획득 헬퍼 함수"""
     return PMetrics.get_instance()
