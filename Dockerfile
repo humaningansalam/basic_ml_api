@@ -1,21 +1,27 @@
-FROM python:3.10-slim
+FROM debian:bookworm-slim
 
 ARG VERSION
 ENV VERSION=$VERSION
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 WORKDIR /usr/src/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libhdf5-dev \
+    gcc \
+    g++ \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock* ./
+
+RUN uv sync --frozen --python 3.11 --no-install-project
 
 COPY . .
 
-RUN apt-get update && apt-get install -y pkg-config libhdf5-dev gcc g++\
-    && python -m pip install --upgrade pip\
-    && pip install --no-cache-dir poetry \
-    && poetry config virtualenvs.create false \
-    && poetry install --no-root \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
-# 시작 명령
-CMD ["python3", "-m", "src.main"]
+CMD ["python", "-m", "src.main"]
