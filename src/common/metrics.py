@@ -1,22 +1,19 @@
 #common/metrics
+from his_mon import BaseMetrics
 from prometheus_client import Counter, Gauge
 import threading
 
-class PMetrics:
+class PMetrics(BaseMetrics):
     _lock = threading.Lock()
     _instance = None
 
     def __init__(self):
-        # MLApi metrics
+        super().__init__(app_name="ml_api")
+        
         self.model_cache_usage = Gauge('model_cache_usage', 'Number of models currently cached')
-        self.errors_count = Counter('errors', 'Number of errors', ['type'])
         self.predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
         self.cache_hits = Counter('cache_hits', 'Number of cache hits')
         self.cache_misses = Counter('cache_misses', 'Number of cache misses')
-
-        # Monitor metrics
-        self.app_cpu_usage = Gauge('app_cpu_usage', 'CPU usage of the application')
-        self.app_ram_usage = Gauge('app_ram_usage', 'RAM usage of the application')
 
     @classmethod
     def get_instance(cls):
@@ -32,12 +29,6 @@ class PMetrics:
 
     def increment_predictions_completed(self):
         self.predictions_completed.inc()
-        
-    def set_app_cpu_usage(self, value):
-        self.app_cpu_usage.set(value)
-
-    def set_app_ram_usage(self, value):
-        self.app_ram_usage.set(value)
 
     def increment_cache_hit(self):
         self.cache_hits.inc()

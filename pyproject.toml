@@ -14,4 +14,7 @@ dependencies = [
     "pytz>=2025.2",
     "tensorflow==2.16.*",
     "tensorflow-io-gcs-filesystem==0.31.0",
+    "his-monitoring",
 ]
+[tool.uv.sources]
+his-monitoring = { git = "https://github.com/humaningansalam/his-monitoring.git", branch = "main" }

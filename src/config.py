@@ -8,6 +8,13 @@ class Config:
     
     # 로깅 설정
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')
+
+    # 로키 설정
+    LOKI_URL = os.getenv('LOKI_URL')
+    LOKI_TAGS = {
+        "app": os.getenv('APP_NAME', 'ml-api'),
+        "env": os.getenv('FLASK_ENV', 'production')
+    }
     
     # 모델 정리 주기 (시간)
     MODEL_CLEANUP_INTERVAL = int(os.getenv('MODEL_CLEANUP_INTERVAL', 5))

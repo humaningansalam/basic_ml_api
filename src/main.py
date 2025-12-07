@@ -1,13 +1,15 @@
 #main
 import logging
+import os
 from flask import Flask
 from src.config import Config
 from src.api.health import health_bp
 from src.api.metrics import metrics_bp
 from src.api.model_routes import model_bp
 from src.core.model_manager import ModelManager
-from src.core.monitor import ResourceMonitor
 from src.common.utils import set_folder
+from src.common.metrics import get_metrics 
+from his_mon import setup_logging, ResourceMonitor
 
 def create_app(config_class=Config):
     """Flask 애플리케이션 팩토리 함수"""
@@ -29,12 +31,17 @@ def create_app(config_class=Config):
 
 if __name__ == '__main__':
     # 로깅 설정
-    logging.basicConfig(level=Config.LOG_LEVEL)
+    setup_logging(
+        level=Config.LOG_LEVEL,
+        loki_url=Config.LOKI_URL,
+        tags=Config.LOKI_TAGS,
+    )
     
     app = create_app()
     
     # 리소스 모니터 시작
-    monitor = ResourceMonitor()
-    monitor.start_monitor()
+    metrics = get_metrics()
+    monitor = ResourceMonitor(metrics_obj=metrics, interval=5)
+    monitor.start()
     
     app.run(host=Config.HOST, port=Config.PORT)
