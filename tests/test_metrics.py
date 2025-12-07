@@ -6,9 +6,10 @@ def test_metrics_endpoint(client):
     metrics_data = response.data.decode('utf-8')
     
     assert 'model_cache_usage' in metrics_data
-    assert 'errors' in metrics_data
     assert 'predictions_completed' in metrics_data
     assert 'cache_hits' in metrics_data     
     assert 'cache_misses' in metrics_data    
-    assert 'app_cpu_usage' in metrics_data
-    assert 'app_ram_usage' in metrics_data
+
+    assert 'ml_api_errors_total' in metrics_data 
+    assert 'ml_api_cpu_usage_percent' in metrics_data
+    assert 'ml_api_ram_usage_mb' in metrics_data

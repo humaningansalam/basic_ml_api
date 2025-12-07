@@ -25,7 +25,7 @@ class PMetrics(BaseMetrics):
 
     # Metric 메서드들
     def increment_error_count(self, error_type):
-        self.errors_count.labels(type=error_type).inc()
+        self.error_count.labels(type=error_type).inc()
 
     def increment_predictions_completed(self):
         self.predictions_completed.inc()

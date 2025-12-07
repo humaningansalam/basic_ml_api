@@ -40,5 +40,5 @@ def test_upload_model_missing_data(client, get_metric_value):
     assert response.status_code == 400
     assert 'Missing data' in response.json['error']
     
-    counter_value = get_metric_value('errors', {'type': 'upload_model_missing_data'})
+    counter_value = get_metric_value('ml_api_errors', {'type': 'upload_model_missing_data'})
     assert counter_value == 1

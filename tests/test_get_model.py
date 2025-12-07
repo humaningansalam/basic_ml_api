@@ -17,11 +17,11 @@ def test_get_model_success(mock_time, client):
 def test_get_model_missing_hash(client, get_metric_value):
     """해시 파라미터 누락 테스트"""
     response = client.get('/get_model')
-    
+
     assert response.status_code == 400
     assert response.json['error'] == 'Model hash is required'
     
-    counter_value = get_metric_value('errors', {'type': 'get_model_missing_hash'})
+    counter_value = get_metric_value('ml_api_errors', {'type': 'get_model_missing_hash'})
     assert counter_value == 1
 
 def test_get_model_not_found(client, get_metric_value):
@@ -31,5 +31,5 @@ def test_get_model_not_found(client, get_metric_value):
     assert response.status_code == 404
     assert response.json['error'] == 'No such model'
     
-    counter_value = get_metric_value('errors', {'type': 'get_model_not_found'})
+    counter_value = get_metric_value('ml_api_errors', {'type': 'get_model_not_found'})
     assert counter_value == 1

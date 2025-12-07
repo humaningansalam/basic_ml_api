@@ -44,7 +44,7 @@ def test_predict_missing_data(client, get_metric_value):
     
     assert response.status_code == 400
     assert 'Missing' in response.json['error']
-    counter_value = get_metric_value('errors', {'type': 'predict_missing_data'})
+    counter_value = get_metric_value('ml_api_errors', {'type': 'predict_missing_data'})
     assert counter_value == 1
 
 def test_predict_model_not_found(client, get_metric_value):
@@ -55,5 +55,5 @@ def test_predict_model_not_found(client, get_metric_value):
     assert response.status_code == 404
     assert response.json['error'] == 'Model not found'
 
-    counter_value = get_metric_value('errors', {'type': 'predict_model_not_found'})
+    counter_value = get_metric_value('ml_api_errors', {'type': 'predict_model_not_found'})
     assert counter_value == 1
