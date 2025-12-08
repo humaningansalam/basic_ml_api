@@ -1,6 +1,8 @@
 FROM debian:bookworm-slim
 
 ARG VERSION
+ARG INSTALL_DEV=false
+
 ENV VERSION=$VERSION
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -17,7 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml uv.lock* ./
 
-RUN uv sync --frozen --python 3.11 --no-install-project
+RUN uv sync --frozen --python 3.11 --no-install-project && \
+    if [ "$INSTALL_DEV" = "true" ]; then \
+        uv sync --frozen --python 3.11 --group dev --no-install-project; \
+    fi
 
 COPY . .
 
