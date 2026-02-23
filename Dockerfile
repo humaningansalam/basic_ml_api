@@ -30,4 +30,4 @@ ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
-CMD ["python", "-m", "src.main"]
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "src.main:create_app()"]
