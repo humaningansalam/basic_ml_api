@@ -11,7 +11,7 @@ services:
       container_name: basic_ml_api
       restart: unless-stopped
       volumes:
-        - ./data:/usr/src/app/myapp/data
+        - ./data:/usr/src/app/data
       ports:
         - 12021:5000
       env_file:

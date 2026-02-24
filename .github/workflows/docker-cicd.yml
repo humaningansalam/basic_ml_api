@@ -10,7 +10,6 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-
     outputs:
       version: ${{ steps.get_version.outputs.version }}
 
@@ -19,16 +18,19 @@ jobs:
 
     - name: Extract version from pyproject.toml
       id: get_version
-      run: echo "VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = \"(.*)\"/\1/')" >> $GITHUB_OUTPUT
+      run: |
+        VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      run: docker build -t myapp:${{ steps.get_version.outputs.VERSION }} -f Dockerfile .
+      run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
 
     - name: Run Docker container
-      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ steps.get_version.outputs.VERSION }}
+      run: docker run -d -p 5000:5000 --name myapp-container myapp:${{ env.VERSION }}
 
     - name: health check
       run: |
@@ -60,6 +62,7 @@ jobs:
       if: always() # Pick up events even if the job fails or is canceled.
 
   deploy:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
 

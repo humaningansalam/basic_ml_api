@@ -1,26 +1,33 @@
-FROM python:3.10-slim
-
-ENV POETRY_VIRTUALENVS_CREATE=false
+FROM debian:bookworm-slim
 
 ARG VERSION
+ARG INSTALL_DEV=false
+
 ENV VERSION=$VERSION
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /usr/src/app
 
-COPY . .
-
-RUN apt-get update && apt-get install -y \
-    pkg-config \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-dev \
     gcc \
     g++ \
-    && python -m pip install --upgrade pip \
-    && pip install --no-cache-dir poetry \
-    && poetry install --no-root \
-    && apt-get clean \
+    ca-certificates \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock* ./
+
+RUN uv sync --frozen --python 3.11 --no-install-project && \
+    if [ "$INSTALL_DEV" = "true" ]; then \
+        uv sync --frozen --python 3.11 --group dev --no-install-project; \
+    fi
+
+COPY . .
+
+ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
-# 시작 명령
-CMD ["python3", "-m", "myapp.src.main"]
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "src.main:create_app()"]

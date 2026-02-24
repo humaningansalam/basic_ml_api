@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Extract version from pyproject.toml
       id: get_version
@@ -20,7 +20,7 @@ jobs:
       uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      run: docker build -t myapp:${{ env.VERSION }} -f Dockerfile .
+      run: docker build --build-arg INSTALL_DEV=true -t myapp:${{ env.VERSION }} -f Dockerfile .
 
     - name: Run Tests with Docker
       run: docker run --name myapp-container myapp:${{ env.VERSION }} pytest --disable-warnings -v
