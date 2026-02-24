@@ -5,6 +5,9 @@ services:
         context: .
         args:
           VERSION: ${VERSION}
+        tags:
+          - "basic_ml_api:${VERSION}"
+      image: basic_ml_api:${VERSION}
       container_name: basic_ml_api
       restart: unless-stopped
       volumes:
