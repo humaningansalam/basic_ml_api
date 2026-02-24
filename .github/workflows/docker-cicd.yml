@@ -86,7 +86,9 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
           cd ~/docker/basic_ml_api
-          echo "LOG_LEVEL=${{ vars.LOG_LEVEL }}" > .env
+          echo "APP_NAME=${{ vars.APP_NAME }}" > .env
+          echo "APP_ENV=${{ vars.APP_ENV }}" >> .env
+          echo "LOG_LEVEL=${{ vars.LOG_LEVEL }}" >> .env
           echo "VERSION=${{ needs.build.outputs.version }}" >> .env
           docker compose down --rmi all
           docker compose build --no-cache

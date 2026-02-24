@@ -7,13 +7,13 @@ class Config:
     MODEL_STORE_PATH = os.getenv('MODEL_STORE_PATH', '../data/model_')
     
     # 로깅 설정
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 
     # 로키 설정
     LOKI_URL = os.getenv('LOKI_URL')
     LOKI_TAGS = {
         "app": os.getenv('APP_NAME', 'ml-api'),
-        "env": os.getenv('FLASK_ENV', 'production')
+        "env": os.getenv('APP_ENV', 'dev')
     }
     
     # 모델 정리 주기 (시간)
