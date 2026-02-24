@@ -62,6 +62,7 @@ jobs:
       if: always() # Pick up events even if the job fails or is canceled.
 
   deploy:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
 

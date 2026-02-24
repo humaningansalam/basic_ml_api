@@ -12,6 +12,7 @@ dependencies = [
     "tensorflow==2.16.*",
     "tensorflow-io-gcs-filesystem==0.31.0",
     "his-monitoring",
+    "gunicorn>=22.0.0",
 ]
 [tool.uv.sources]
 his-monitoring = { git = "https://github.com/humaningansalam/his-monitoring.git", branch = "main" }
