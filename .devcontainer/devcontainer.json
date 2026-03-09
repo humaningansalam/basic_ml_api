@@ -1,0 +1,17 @@
+{
+  "name": "basic_ml_api",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/basic_ml_api",
+  "postCreateCommand": "python --version",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  }
+}
