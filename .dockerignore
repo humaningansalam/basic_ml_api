@@ -1,0 +1,59 @@
+# Local environment and virtualenvs
+.venv/
+.uv-cache/
+.env
+.env.*
+*.env
+
+# Python caches and bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Test, coverage, and lint artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+
+# Git metadata
+.git/
+.gitignore
+.gitattributes
+
+# Runtime and generated data
+repoctl-state/
+data/
+*.sqlite3
+*.db
+*.parquet
+*.h5
+*.hdf5
+*.joblib
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.ckpt
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+
+# Keep required build inputs in context
+!Dockerfile
+!docker-compose.yml
+!README.md
+!pyproject.toml
+!uv.lock
+!src/
+!tests/
+!docs/

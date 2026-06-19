@@ -1,7 +1,8 @@
 #main
 import logging
 import os
-from flask import Flask
+from flask import Flask, jsonify
+from werkzeug.exceptions import RequestEntityTooLarge
 from src.config import Config
 from src.api.health import health_bp
 from src.api.metrics import metrics_bp
@@ -13,33 +14,41 @@ from his_mon import setup_logging, ResourceMonitor
 
 _setup_done = False
 
+
+def _should_start_monitoring(config_class) -> bool:
+    return getattr(config_class, 'START_BACKGROUND_MONITORING', True)
+
+
 def create_app(config_class=Config):
     """Flask 애플리케이션 팩토리 함수"""
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
-    # 폴더 생성
-    set_folder(app.config['MODEL_STORE_PATH'])
-    
-    # 모델 매니저 주입 (싱글톤처럼 앱 컨텍스트에 부착)
-    app.model_manager = ModelManager(app.config['MODEL_STORE_PATH'])
+    app.config['MAX_CONTENT_LENGTH'] = app.config['MAX_MODEL_FILE_SIZE']
 
-    if not _setup_done:
-        # 로깅 설정
+    set_folder(app.config['MODEL_STORE_PATH'])
+
+    app.model_manager = ModelManager(
+        app.config['MODEL_STORE_PATH'],
+        cleanup_interval_hours=app.config['MODEL_CLEANUP_INTERVAL'],
+    )
+
+    if _should_start_monitoring(config_class) and not _setup_done:
         setup_logging(
             level=Config.LOG_LEVEL,
             loki_url=Config.LOKI_URL,
             tags=Config.LOKI_TAGS,
         )
 
-        # 리소스 모니터 시작
         metrics = get_metrics()
         monitor = ResourceMonitor(metrics_obj=metrics, interval=5)
         monitor.start()
 
-        globals()["_setup_done"] = True
+        globals()['_setup_done'] = True
 
-    # 블루프린트 등록
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_entity_too_large(error):
+        return jsonify({'error': 'Uploaded file too large'}), 413
+
     app.register_blueprint(health_bp)
     app.register_blueprint(metrics_bp)
     app.register_blueprint(model_bp)
@@ -48,5 +57,5 @@ def create_app(config_class=Config):
 
 if __name__ == '__main__':
     app = create_app()
-    
+
     app.run(host=Config.HOST, port=Config.PORT)

@@ -30,6 +30,13 @@ uv sync
 uv run python -m src.main
 ```
 
+### Docker Compose
+Docker Compose defaults to `VERSION=dev`, so a fresh checkout can render configuration without a local `.env` file.
+If you want to override the image tag or app settings locally, add a `.env` file in `repo/`.
+```bash
+docker compose config
+```
+
 ## API 참조
 
 - **모델 업로드**: `POST /upload_model`
@@ -44,12 +51,12 @@ uv run python -m src.main
 - **메트릭 조회**: `GET /metrics`
 
 ## Prometheus 메트릭
-- `app_cpu_usage`: CPU 사용량 (%)
-- `app_ram_usage`: RAM 사용량 (MB)
+- `ml_api_cpu_usage_percent`: CPU 사용량 (%)
+- `ml_api_ram_usage_mb`: RAM 사용량 (MB)
 - `model_cache_usage`: 현재 캐시된 모델 수
 - `cache_hits` / `cache_misses`: 캐시 적중/미적중 횟수
 - `predictions_completed`: 예측 완료 횟수
-- `errors`: 에러 발생 횟수
+- `ml_api_errors_total`: 에러 발생 횟수
 
 
 ## 라이센스

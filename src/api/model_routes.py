@@ -1,6 +1,7 @@
 #api/model_routes
 import numpy as np
 from flask import Blueprint, request, jsonify, current_app
+from zipfile import BadZipFile
 from src.common.metrics import get_metrics
 
 model_bp = Blueprint('model', __name__)
@@ -17,10 +18,22 @@ def upload_model():
         metrics.increment_error_count('upload_model_missing_data')
         return jsonify({'error': 'Missing data (file or hash)'}), 400
 
+    if request.content_length is not None and request.content_length > current_app.config['MAX_MODEL_FILE_SIZE']:
+        metrics.increment_error_count('upload_model_too_large')
+        return jsonify({'error': 'Uploaded file too large'}), 413
+
     try:
         # ModelManager를 통해 모델 저장 및 압축 해제
         msg, status = current_app.model_manager.upload_model(model_file, model_hash)
         return jsonify({'message': msg}), status
+
+    except ValueError as e:
+        metrics.increment_error_count('upload_model_error')
+        return jsonify({'error': str(e)}), 400
+
+    except BadZipFile:
+        metrics.increment_error_count('upload_model_error')
+        return jsonify({'error': 'Invalid zip file'}), 400
 
     except Exception as e:
         metrics.increment_error_count('upload_model_error')
