@@ -26,7 +26,7 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 | `MODEL_CLEANUP_INTERVAL` | Cleanup interval in hours | `5` |
 | `SERVER_HOST` | Flask host binding | `0.0.0.0` |
 | `SERVER_PORT` | Flask port | `5000` |
-| `MAX_MODEL_FILE_SIZE` | Maximum model file size, also used for Flask request size limiting | `104857600` |
+| `MAX_MODEL_FILE_SIZE` | Maximum uploaded model file size | `104857600` |
 
 ## Model Upload
 
@@ -61,6 +61,7 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 - ZIP contents are extracted into the model directory.
 - `temp.zip` is removed after extraction attempt.
 - Model metadata is stored in memory with `file_path` and `used` timestamp.
+- Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and `{"error": "Uploaded file too large"}`.
 
 ## Model Lookup
 
@@ -175,13 +176,13 @@ The test suite currently covers:
 - Successful model upload with a ZIP containing `.keras`.
 - Upload validation for missing data.
 - Successful prediction with mocked TensorFlow loading.
-- Prediction validation for missing data and unknown models.
+- Prediction validation for missing, empty, malformed, and unknown-model requests.
 - Model lookup success, missing hash, and unknown model behavior.
 
-Run tests from `repo/` with:
+Run tests from the repository root with:
 
 ```bash
-uv run pytest
+uv run python -m pytest
 ```
 
 ## Known Implementation Constraints
@@ -189,5 +190,5 @@ uv run pytest
 - The service has no built-in authentication or authorization.
 - Metadata is in memory and rebuilt from model directories at startup.
 - ZIP extraction should be reviewed before accepting untrusted uploads.
-- Flask request size limiting uses `MAX_MODEL_FILE_SIZE` via `MAX_CONTENT_LENGTH`.
+- Uploaded file payload size is enforced with `MAX_MODEL_FILE_SIZE`; this is an application-level check, not Flask `MAX_CONTENT_LENGTH` request-size limiting.
 - Multiple Gunicorn workers would each have independent model metadata and cache state.

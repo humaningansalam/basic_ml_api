@@ -23,7 +23,6 @@ def create_app(config_class=Config):
     """Flask 애플리케이션 팩토리 함수"""
     app = Flask(__name__)
     app.config.from_object(config_class)
-    app.config['MAX_CONTENT_LENGTH'] = app.config['MAX_MODEL_FILE_SIZE']
 
     set_folder(app.config['MODEL_STORE_PATH'])
 

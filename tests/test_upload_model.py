@@ -90,12 +90,25 @@ def test_upload_model_rejects_traversal_entry(mock_zipfile, mock_save, client):
     assert response.json['error'] == 'Unsafe zip entry'
 
 
-def test_upload_model_oversized_request_is_rejected(client):
+def test_upload_model_small_file_reaches_zip_validation(client):
+    client.application.config['MAX_MODEL_FILE_SIZE'] = 100
+    response = client.post(
+        '/upload_model?hash=testhash123',
+        data={'model_file': (io.BytesIO(b'a'), 'model.zip')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert response.json['error'] == 'Invalid zip file'
+
+
+def test_upload_model_oversized_file_payload_is_rejected(client):
     client.application.config['MAX_MODEL_FILE_SIZE'] = 1
-    client.application.config['MAX_CONTENT_LENGTH'] = 1
-    response = client.post('/upload_model?hash=testhash123',
-                         data={'model_file': (io.BytesIO(b'abc'), 'model.zip')},
-                         content_type='multipart/form-data')
+    response = client.post(
+        '/upload_model?hash=testhash123',
+        data={'model_file': (io.BytesIO(b'abc'), 'model.zip')},
+        content_type='multipart/form-data',
+    )
 
     assert response.status_code == 413
     assert response.json['error'] == 'Uploaded file too large'

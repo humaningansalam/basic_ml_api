@@ -7,6 +7,17 @@ from src.common.metrics import get_metrics
 model_bp = Blueprint('model', __name__)
 metrics = get_metrics()
 
+
+def _get_uploaded_file_size(model_file) -> int:
+    stream = model_file.stream
+    current_position = stream.tell()
+    try:
+        stream.seek(0, 2)
+        return stream.tell()
+    finally:
+        stream.seek(current_position)
+
+
 @model_bp.route('/upload_model', methods=['POST'])
 def upload_model():
     """모델 업로드 엔드포인트"""
@@ -18,7 +29,7 @@ def upload_model():
         metrics.increment_error_count('upload_model_missing_data')
         return jsonify({'error': 'Missing data (file or hash)'}), 400
 
-    if request.content_length is not None and request.content_length > current_app.config['MAX_MODEL_FILE_SIZE']:
+    if _get_uploaded_file_size(model_file) > current_app.config['MAX_MODEL_FILE_SIZE']:
         metrics.increment_error_count('upload_model_too_large')
         return jsonify({'error': 'Uploaded file too large'}), 413
 
@@ -44,7 +55,7 @@ def upload_model():
 def predict():
     """예측 수행 엔드포인트"""
     model_hash = request.args.get('hash')
-    data = request.get_json()
+    data = request.get_json(silent=True)
     
     # 필수 파라미터 확인
     if not model_hash or not data:

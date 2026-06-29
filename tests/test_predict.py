@@ -42,6 +42,38 @@ def test_predict_missing_data(client, get_metric_value):
     assert counter_value == 1
 
 
+def test_predict_missing_json_body_returns_json_error(client):
+    response = client.post('/predict?hash=testhash123')
+
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert response.json['error'] == 'Missing hash or data'
+
+
+def test_predict_empty_json_body_returns_json_error(client):
+    response = client.post(
+        '/predict?hash=testhash123',
+        data=b'',
+        content_type='application/json',
+    )
+
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert response.json['error'] == 'Missing hash or data'
+
+
+def test_predict_malformed_json_body_returns_json_error(client):
+    response = client.post(
+        '/predict?hash=testhash123',
+        data=b'{',
+        content_type='application/json',
+    )
+
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert response.json['error'] == 'Missing hash or data'
+
+
 def test_predict_model_not_found(client, get_metric_value):
     """존재하지 않는 모델로 예측 시도 테스트"""
     response = client.post('/predict?hash=nonexistent',
