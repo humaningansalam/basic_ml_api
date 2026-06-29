@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 import threading
 import time
 from collections import OrderedDict
@@ -176,51 +177,60 @@ class ModelManager:
             raise ValueError('Invalid model hash')
 
         model_folder_path = os.path.join(self.store_path, model_hash)
-        temp_zip_path = os.path.join(model_folder_path, 'temp.zip')
         model_dir_lock = self._get_model_dir_lock(model_hash)
 
         with model_dir_lock:
-            os.makedirs(model_folder_path, exist_ok=True)
-            model_file.save(temp_zip_path)
+            os.makedirs(self.store_path, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix=f'{model_hash}-upload-', dir=self.store_path) as staging_dir:
+                temp_zip_path = os.path.join(staging_dir, 'temp.zip')
+                model_file.save(temp_zip_path)
 
-            try:
                 try:
-                    with ZipFile(temp_zip_path, 'r') as zip_ref:
-                        names = zip_ref.namelist()
-                        base_path = Path(model_folder_path).resolve()
-                        has_keras = False
+                    try:
+                        with ZipFile(temp_zip_path, 'r') as zip_ref:
+                            names = zip_ref.namelist()
+                            base_path = Path(staging_dir).resolve()
+                            has_keras = False
 
-                        for member in names:
-                            member_path = Path(member)
-                            member_text = member.replace('\\', '/')
-                            is_windows_drive_path = len(member) >= 2 and member[1] == ':'
-                            is_absolute_path = member_path.is_absolute() or member.startswith('\\') or is_windows_drive_path
+                            for member in names:
+                                member_path = Path(member)
+                                member_text = member.replace('\\', '/')
+                                is_windows_drive_path = len(member) >= 2 and member[1] == ':'
+                                is_absolute_path = member_path.is_absolute() or member.startswith('\\') or is_windows_drive_path
 
-                            if is_absolute_path or any(part == '..' for part in member_path.parts):
-                                raise ValueError('Unsafe zip entry')
+                                if is_absolute_path or any(part == '..' for part in member_path.parts):
+                                    raise ValueError('Unsafe zip entry')
 
-                            target_path = (Path(model_folder_path) / member_path).resolve()
-                            if not target_path.is_relative_to(base_path):
-                                raise ValueError('Unsafe zip entry')
+                                target_path = (Path(staging_dir) / member_path).resolve()
+                                if not target_path.is_relative_to(base_path):
+                                    raise ValueError('Unsafe zip entry')
 
-                            if member_text.endswith('.keras'):
-                                has_keras = True
+                                if member_text.endswith('.keras'):
+                                    has_keras = True
 
-                        if not has_keras:
-                            raise ValueError('No .keras file in zip')
+                            if not has_keras:
+                                raise ValueError('No .keras file in zip')
 
-                        zip_ref.extractall(model_folder_path)
-                except BadZipFile:
-                    raise ValueError('Invalid zip file')
-            finally:
-                if os.path.exists(temp_zip_path):
-                    os.remove(temp_zip_path)
+                            zip_ref.extractall(staging_dir)
+                    except BadZipFile:
+                        raise ValueError('Invalid zip file')
+                finally:
+                    if os.path.exists(temp_zip_path):
+                        os.remove(temp_zip_path)
 
-            with self._state_lock:
-                self.metadata_store[model_hash] = {
-                    'file_path': model_folder_path,
-                    'used': utils.get_kr_time()
-                }
+                with self._state_lock:
+                    if model_hash in self.model_cache:
+                        del self.model_cache[model_hash]
+                        self.metrics.set_model_cache_usage(len(self.model_cache))
+
+                    if os.path.exists(model_folder_path):
+                        shutil.rmtree(model_folder_path)
+                    shutil.move(staging_dir, model_folder_path)
+
+                    self.metadata_store[model_hash] = {
+                        'file_path': model_folder_path,
+                        'used': utils.get_kr_time()
+                    }
 
         return 'Model uploaded successfully', 200
 

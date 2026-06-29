@@ -1,6 +1,7 @@
 import pytest
 import io
 import zipfile
+import numpy as np
 from unittest.mock import patch, MagicMock
 
 from src.core.model_manager import ModelManager
@@ -12,6 +13,23 @@ def create_test_model_zip():
         zf.writestr('model.keras', b'dummy content')
     memory_file.seek(0)
     return memory_file
+
+
+def create_test_model_zip_bytes():
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w') as zf:
+        zf.writestr('replacement-model.keras', b'replacement content')
+    memory_file.seek(0)
+    return memory_file.getvalue()
+
+
+class _UploadFile:
+    def __init__(self, content):
+        self._content = content
+
+    def save(self, path):
+        with open(path, 'wb') as f:
+            f.write(self._content)
 
 @patch('werkzeug.datastructures.FileStorage.save')
 @patch('src.core.model_manager.ZipFile')
@@ -167,3 +185,41 @@ def test_model_manager_accepts_valid_existing_hash(tmp_path):
     manager = ModelManager(str(tmp_path))
 
     assert manager._MODEL_HASH_PATTERN.fullmatch('testhash123')
+
+
+@patch('src.core.model_manager.tf.keras.models.load_model')
+def test_upload_model_replaces_existing_hash_and_invalidates_cached_model(mock_load_model, tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / 'old.keras').write_bytes(b'old model')
+
+    old_model = MagicMock()
+    old_model.predict.return_value = np.array([[0.1, 0.9]])
+    manager.model_cache[model_hash] = old_model
+    manager.metadata_store[model_hash] = {
+        'file_path': str(model_dir),
+        'used': '2024-04-27T12:00:00',
+    }
+
+    uploaded_model = _UploadFile(create_test_model_zip_bytes())
+
+    replacement_model = MagicMock()
+    replacement_model.predict.return_value = np.array([[0.8, 0.2]])
+    mock_load_model.return_value = replacement_model
+
+    response_message, response_status = manager.upload_model(uploaded_model, model_hash)
+
+    assert response_status == 200
+    assert response_message == 'Model uploaded successfully'
+    assert not (model_dir / 'old.keras').exists()
+    assert (model_dir / 'replacement-model.keras').exists()
+    assert set(path.name for path in model_dir.glob('*.keras')) == {'replacement-model.keras'}
+    assert model_hash not in manager.model_cache
+
+    prediction, status = manager.predict(model_hash, np.array([[1.0, 2.0]]))
+    assert status == 200
+    assert prediction.tolist() == [[0.8, 0.2]]
+    old_model.predict.assert_not_called()
+    assert mock_load_model.call_count == 1

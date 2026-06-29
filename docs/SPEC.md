@@ -57,9 +57,12 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Storage Behavior
 
 - The service creates a directory under `MODEL_STORE_PATH` named by the supplied hash.
-- The uploaded ZIP is temporarily saved as `temp.zip` inside that directory.
-- ZIP contents are extracted into the model directory.
+- The uploaded ZIP is temporarily saved as `temp.zip` inside a staging directory.
+- ZIP contents are first validated and extracted into a temporary staging directory.
+- The target hash directory is then replaced entirely so stale files are removed.
 - `temp.zip` is removed after extraction attempt.
+- If `hash` already exists, the old in-memory cached model is invalidated so the next `/predict` for that hash loads from disk again.
+- If a hash is uploaded again, the existing directory contents are replaced and only the new upload is retained.
 - Model metadata is stored in memory with `file_path` and `used` timestamp.
 - Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and `{"error": "Uploaded file too large"}`.
 
