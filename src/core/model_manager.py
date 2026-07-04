@@ -30,7 +30,7 @@ class ModelManager:
         self.logger = logging.getLogger(__name__)
         self.cleanup_interval_hours = cleanup_interval_hours if cleanup_interval_hours is not None else 5
         self._state_lock = threading.RLock()
-        self._cleanup_locks: Dict[str, threading.Lock] = {}
+        self._cleanup_locks: Dict[str, threading.RLock] = {}
         self._cleanup_thread_started = False
         self._cleanup_thread_lock = threading.Lock()
 
@@ -66,11 +66,11 @@ class ModelManager:
         thread = threading.Thread(target=scheduled_cleanup, daemon=True)
         thread.start()
 
-    def _get_model_dir_lock(self, model_hash: str) -> threading.Lock:
+    def _get_model_dir_lock(self, model_hash: str) -> threading.RLock:
         with self._state_lock:
             lock = self._cleanup_locks.get(model_hash)
             if lock is None:
-                lock = threading.Lock()
+                lock = threading.RLock()
                 self._cleanup_locks[model_hash] = lock
             return lock
 
@@ -116,39 +116,45 @@ class ModelManager:
             self.logger.error(f"Cleanup failed: {e}")
 
     def load_model_to_cache(self, model_hash: str) -> Optional[Any]:
-        with self._state_lock:
-            if model_hash in self.model_cache:
-                self.model_cache.move_to_end(model_hash)
-                self.metrics.increment_cache_hit()
-                return self.model_cache[model_hash]
+        with self._get_model_dir_lock(model_hash):
+            with self._state_lock:
+                if model_hash in self.model_cache:
+                    self.model_cache.move_to_end(model_hash)
+                    self.metrics.increment_cache_hit()
+                    return self.model_cache[model_hash]
 
-            if model_hash not in self.metadata_store:
-                raise KeyError(f"Model hash {model_hash} not found")
+                if model_hash not in self.metadata_store:
+                    raise KeyError(f"Model hash {model_hash} not found")
 
-            model_folder_path = self.metadata_store[model_hash]['file_path']
+                model_folder_path = self.metadata_store[model_hash]['file_path']
 
-        keras_file_path = None
-        for root, _, files in os.walk(model_folder_path):
-            for file in files:
-                if file.endswith('.keras'):
-                    keras_file_path = os.path.join(root, file)
+            keras_file_path = None
+            for root, _, files in os.walk(model_folder_path):
+                for file in files:
+                    if file.endswith('.keras'):
+                        keras_file_path = os.path.join(root, file)
+                        break
+                if keras_file_path:
                     break
-            if keras_file_path:
-                break
 
-        if not keras_file_path:
-            raise OSError('No .keras file found')
+            if not keras_file_path:
+                raise OSError('No .keras file found')
 
-        model = tf.keras.models.load_model(keras_file_path)
+            model = tf.keras.models.load_model(keras_file_path)
 
-        with self._state_lock:
-            cached_model = self.model_cache.get(model_hash)
-            if cached_model is not None:
-                self.model_cache.move_to_end(model_hash)
-                self.metrics.increment_cache_hit()
-                return cached_model
+            with self._state_lock:
+                cached_model = self.model_cache.get(model_hash)
+                if cached_model is not None:
+                    self.model_cache.move_to_end(model_hash)
+                    self.metrics.increment_cache_hit()
+                    return cached_model
 
-            if model_hash in self.metadata_store:
+                current_metadata = self.metadata_store.get(model_hash)
+                if current_metadata is None:
+                    raise KeyError(f"Model hash {model_hash} not found")
+                if current_metadata['file_path'] != model_folder_path:
+                    raise KeyError(f"Model hash {model_hash} changed during load")
+
                 if len(self.model_cache) >= self.max_cache_size:
                     self.model_cache.popitem(last=False)
                 self.model_cache[model_hash] = model
@@ -156,16 +162,15 @@ class ModelManager:
                 self.metrics.set_model_cache_usage(len(self.model_cache))
                 return model
 
-        return model
-
     def predict(self, model_hash: str, data: np.ndarray) -> Tuple[np.ndarray, int]:
         try:
-            model = self.load_model_to_cache(model_hash)
-            with self._state_lock:
-                metadata = self.metadata_store.get(model_hash)
-                if metadata is None:
-                    raise KeyError(f"Model hash {model_hash} not found")
-                metadata['used'] = utils.get_kr_time()
+            with self._get_model_dir_lock(model_hash):
+                model = self.load_model_to_cache(model_hash)
+                with self._state_lock:
+                    metadata = self.metadata_store.get(model_hash)
+                    if metadata is None:
+                        raise KeyError(f"Model hash {model_hash} not found")
+                    metadata['used'] = utils.get_kr_time()
             prediction = model.predict(data)
             return prediction, 200
         except Exception as e:

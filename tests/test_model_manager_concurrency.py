@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime
 from collections import OrderedDict
 from unittest.mock import MagicMock, patch
 
@@ -53,6 +54,76 @@ def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
 
     assert prediction['value'][1] == 200
     assert prediction['value'][0].tolist() == [[0.9, 0.1]]
+
+
+def test_predict_blocks_stale_cleanup_until_used_timestamp_refreshes(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir()
+    (model_dir / 'model.keras').write_bytes(b'model')
+    manager.metadata_store[model_hash] = {
+        'file_path': str(model_dir),
+        'used': datetime(2024, 1, 1),
+    }
+    manager.model_cache = OrderedDict()
+
+    stale_cutoff = datetime(2025, 1, 1)
+    fresh_used = datetime(2025, 2, 1)
+    load_started = threading.Event()
+    release_load = threading.Event()
+    cleanup_lock_requested = threading.Event()
+    cleanup_finished = threading.Event()
+    cleanup_result = {}
+    prediction = {}
+
+    def fake_load_model(path):
+        load_started.set()
+        release_load.wait(timeout=5)
+        model = MagicMock()
+        model.predict.return_value = np.array([[0.9, 0.1]])
+        return model
+
+    original_get_model_dir_lock = manager._get_model_dir_lock
+
+    def tracked_get_model_dir_lock(current_hash):
+        if threading.current_thread().name == 'cleanup-thread':
+            cleanup_lock_requested.set()
+        return original_get_model_dir_lock(current_hash)
+
+    def run_predict():
+        prediction['value'] = manager.predict(model_hash, np.array([[1.0, 2.0]]))
+
+    def run_cleanup():
+        cleanup_result['value'] = manager.clean_old_models()
+        cleanup_finished.set()
+
+    with patch('src.core.model_manager.os.walk', return_value=[(str(model_dir), [], ['model.keras'])]), \
+         patch('src.core.model_manager.tf.keras.models.load_model', side_effect=fake_load_model), \
+         patch('src.core.model_manager.utils.one_week_ago', return_value=stale_cutoff), \
+         patch('src.core.model_manager.utils.get_kr_time', return_value=fresh_used), \
+         patch.object(manager, '_get_model_dir_lock', side_effect=tracked_get_model_dir_lock):
+        predict_thread = threading.Thread(target=run_predict)
+        predict_thread.start()
+
+        assert load_started.wait(timeout=5)
+
+        cleanup_thread = threading.Thread(target=run_cleanup, name='cleanup-thread')
+        cleanup_thread.start()
+
+        assert cleanup_lock_requested.wait(timeout=5)
+        assert not cleanup_finished.wait(timeout=0.1)
+
+        release_load.set()
+        predict_thread.join(timeout=5)
+        cleanup_thread.join(timeout=5)
+
+    assert cleanup_finished.is_set()
+    assert cleanup_result['value'] is None
+    assert prediction['value'][1] == 200
+    assert prediction['value'][0].tolist() == [[0.9, 0.1]]
+    assert (model_dir / 'model.keras').exists()
+    assert manager.metadata_store[model_hash]['used'] == fresh_used
 
 
 def test_upload_and_cleanup_coordinate_on_same_model_directory(tmp_path):
