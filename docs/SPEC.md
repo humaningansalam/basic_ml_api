@@ -18,7 +18,7 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `MODEL_STORE_PATH` | Directory for uploaded and extracted model files | `../data/model_` |
+| `MODEL_STORE_PATH` | Directory for uploaded and extracted model files | `data/model_` |
 | `LOG_LEVEL` | Application log level | `INFO` |
 | `LOKI_URL` | Optional Loki logging endpoint | unset |
 | `APP_NAME` | Logging/monitoring app tag | `ml-api` |
@@ -193,5 +193,5 @@ uv run python -m pytest
 - The service has no built-in authentication or authorization.
 - Metadata is in memory and rebuilt from model directories at startup.
 - ZIP extraction should be reviewed before accepting untrusted uploads.
-- Uploaded file payload size is enforced with `MAX_MODEL_FILE_SIZE`; this is an application-level check, not Flask `MAX_CONTENT_LENGTH` request-size limiting.
+- Uploaded file payload size is enforced with Flask `MAX_CONTENT_LENGTH` and checked again at the application level with `MAX_MODEL_FILE_SIZE`.
 - Multiple Gunicorn workers would each have independent model metadata and cache state.

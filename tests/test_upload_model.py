@@ -39,6 +39,7 @@ def test_upload_model_success(mock_zipfile, mock_save, client):
     mock_zip_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
     mock_zip_instance.namelist.return_value = ['model.keras']
+    mock_zip_instance.getinfo.return_value = MagicMock(file_size=100)
 
     test_zip = create_test_model_zip()
 
@@ -82,6 +83,7 @@ def test_upload_model_missing_keras_is_client_error(mock_zipfile, mock_save, cli
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
     mock_zip.namelist.return_value = ['model.txt']
+    mock_zip.getinfo.return_value = MagicMock(file_size=100)
     mock_zipfile.return_value = mock_zip
 
     response = client.post('/upload_model?hash=testhash123',
@@ -98,6 +100,7 @@ def test_upload_model_rejects_traversal_entry(mock_zipfile, mock_save, client):
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
     mock_zip.namelist.return_value = ['../escape.txt', 'safe.keras']
+    mock_zip.getinfo.return_value = MagicMock(file_size=100)
     mock_zipfile.return_value = mock_zip
 
     response = client.post('/upload_model?hash=testhash123',

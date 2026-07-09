@@ -24,18 +24,21 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    app.config["MAX_CONTENT_LENGTH"] = app.config["MAX_MODEL_FILE_SIZE"]
+
     set_folder(app.config['MODEL_STORE_PATH'])
 
     app.model_manager = ModelManager(
         app.config['MODEL_STORE_PATH'],
         cleanup_interval_hours=app.config['MODEL_CLEANUP_INTERVAL'],
+        max_model_file_size=app.config['MAX_MODEL_FILE_SIZE'],
     )
 
     if _should_start_monitoring(config_class) and not _setup_done:
         setup_logging(
-            level=Config.LOG_LEVEL,
-            loki_url=Config.LOKI_URL,
-            tags=Config.LOKI_TAGS,
+            level=app.config["LOG_LEVEL"],
+            loki_url=app.config.get("LOKI_URL"),
+            tags=app.config.get("LOKI_TAGS"),
         )
 
         metrics = get_metrics()

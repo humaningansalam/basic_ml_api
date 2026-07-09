@@ -4,7 +4,7 @@ import os
 class Config:
     """애플리케이션 설정 관리 클래스"""
     # 모델 저장 경로
-    MODEL_STORE_PATH = os.getenv('MODEL_STORE_PATH', '../data/model_')
+    MODEL_STORE_PATH = os.getenv('MODEL_STORE_PATH', 'data/model_')
     
     # 로깅 설정
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()

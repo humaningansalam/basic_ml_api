@@ -21,9 +21,10 @@ class ModelManager:
     _MODEL_HASH_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
     _STALE_MODEL_AGE_SECONDS = 7 * 24 * 60 * 60
 
-    def __init__(self, store_path: str, max_cache_size: int = 10, cleanup_interval_hours: Optional[int] = None):
+    def __init__(self, store_path: str, max_cache_size: int = 10, cleanup_interval_hours: Optional[int] = None, max_model_file_size: int = 100 * 1024 * 1024):
         self.store_path = store_path
         self.max_cache_size = max_cache_size
+        self.max_model_file_size = max_model_file_size
         self.metadata_store: Dict[str, Dict[str, Any]] = {}
         self.model_cache = OrderedDict()
         self.metrics = get_metrics()
@@ -196,6 +197,11 @@ class ModelManager:
                             names = zip_ref.namelist()
                             base_path = Path(staging_dir).resolve()
                             has_keras = False
+                            total_uncompressed_size = 0
+                            max_entries = 5000
+
+                            if len(names) > max_entries:
+                                raise ValueError(f'Zip contains too many entries: {len(names)} (max {max_entries})')
 
                             for member in names:
                                 member_path = Path(member)
@@ -212,6 +218,11 @@ class ModelManager:
 
                                 if member_text.endswith('.keras'):
                                     has_keras = True
+
+                                total_uncompressed_size += zip_ref.getinfo(member).file_size
+
+                            if total_uncompressed_size > self.max_model_file_size:
+                                raise ValueError(f'Uncompressed size too large: {total_uncompressed_size} bytes')
 
                             if not has_keras:
                                 raise ValueError('No .keras file in zip')
