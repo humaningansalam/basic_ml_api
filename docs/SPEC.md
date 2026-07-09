@@ -193,5 +193,5 @@ uv run python -m pytest
 - The service has no built-in authentication or authorization.
 - Metadata is in memory and rebuilt from model directories at startup.
 - ZIP extraction should be reviewed before accepting untrusted uploads.
-- Uploaded file payload size is enforced with Flask `MAX_CONTENT_LENGTH` and checked again at the application level with `MAX_MODEL_FILE_SIZE`.
+- Uploaded file payload size is enforced by checking the uploaded `model_file` stream against `MAX_MODEL_FILE_SIZE`.
 - Multiple Gunicorn workers would each have independent model metadata and cache state.
