@@ -1,13 +1,12 @@
-version:  '3'
 services:
   basic_ml_api:
-      build: 
+      build:
         context: .
         args:
-          VERSION: ${VERSION}
+          VERSION: ${VERSION:-dev}
         tags:
-          - "basic_ml_api:${VERSION}"
-      image: basic_ml_api:${VERSION}
+          - "basic_ml_api:${VERSION:-dev}"
+      image: basic_ml_api:${VERSION:-dev}
       container_name: basic_ml_api
       restart: unless-stopped
       volumes:
@@ -15,5 +14,6 @@ services:
       ports:
         - 12021:5000
       env_file:
-        - .env
+        - path: .env
+          required: false
 
