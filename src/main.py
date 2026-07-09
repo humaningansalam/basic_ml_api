@@ -1,8 +1,7 @@
 #main
 import logging
 import os
-from flask import Flask, jsonify
-from werkzeug.exceptions import RequestEntityTooLarge
+from flask import Flask
 from src.config import Config
 from src.api.health import health_bp
 from src.api.metrics import metrics_bp
@@ -24,8 +23,6 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    app.config["MAX_CONTENT_LENGTH"] = app.config["MAX_MODEL_FILE_SIZE"]
-
     set_folder(app.config['MODEL_STORE_PATH'])
 
     app.model_manager = ModelManager(
@@ -46,10 +43,6 @@ def create_app(config_class=Config):
         monitor.start()
 
         globals()['_setup_done'] = True
-
-    @app.errorhandler(RequestEntityTooLarge)
-    def handle_request_entity_too_large(error):
-        return jsonify({'error': 'Uploaded file too large'}), 413
 
     app.register_blueprint(health_bp)
     app.register_blueprint(metrics_bp)

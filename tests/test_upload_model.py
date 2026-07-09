@@ -4,7 +4,9 @@ import zipfile
 import numpy as np
 from unittest.mock import patch, MagicMock
 
+from src.config import Config
 from src.core.model_manager import ModelManager
+from src.main import create_app
 
 def create_test_model_zip():
     """테스트용 모델 ZIP 파일 생성 (keras 파일 포함)"""
@@ -114,6 +116,25 @@ def test_upload_model_rejects_traversal_entry(mock_zipfile, mock_save, client):
 def test_upload_model_small_file_reaches_zip_validation(client):
     client.application.config['MAX_MODEL_FILE_SIZE'] = 100
     response = client.post(
+        '/upload_model?hash=testhash123',
+        data={'model_file': (io.BytesIO(b'a'), 'model.zip')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert response.json['error'] == 'Invalid zip file'
+
+
+def test_upload_model_small_file_limit_uses_file_payload(tmp_path):
+    class TinyPayloadLimitConfig(Config):
+        TESTING = True
+        START_BACKGROUND_MONITORING = False
+        MODEL_STORE_PATH = str(tmp_path / 'models')
+        MODEL_CLEANUP_INTERVAL = 0
+        MAX_MODEL_FILE_SIZE = 100
+
+    app = create_app(TinyPayloadLimitConfig)
+    response = app.test_client().post(
         '/upload_model?hash=testhash123',
         data={'model_file': (io.BytesIO(b'a'), 'model.zip')},
         content_type='multipart/form-data',
