@@ -1,7 +1,9 @@
 import pytest
 import io
+import os
 import zipfile
 import numpy as np
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from src.config import Config
@@ -211,6 +213,66 @@ def test_model_manager_accepts_valid_existing_hash(tmp_path):
     assert manager._MODEL_HASH_PATTERN.fullmatch('testhash123')
 
 
+def test_model_manager_ignores_incomplete_and_internal_directories_on_restart(tmp_path):
+    (tmp_path / 'testhash123-upload-crash').mkdir()
+    hidden_staging = tmp_path / '@upload-testhash123-crash'
+    hidden_staging.mkdir()
+    (hidden_staging / 'model.keras').write_bytes(b'incomplete')
+    invalid_hash = tmp_path / 'short'
+    invalid_hash.mkdir()
+    (invalid_hash / 'model.keras').write_bytes(b'invalid hash')
+    directory_only_model = tmp_path / 'validhash123'
+    (directory_only_model / 'fake.keras').mkdir(parents=True)
+
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    assert manager.metadata_store == {}
+
+
+def test_model_manager_restores_backup_after_interrupted_replacement(tmp_path):
+    backup_dir = tmp_path / '@backup-testhash123'
+    backup_dir.mkdir()
+    (backup_dir / 'old.keras').write_bytes(b'old model')
+
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    model_dir = tmp_path / 'testhash123'
+    assert (model_dir / 'old.keras').read_bytes() == b'old model'
+    assert not backup_dir.exists()
+    assert manager.metadata_store['testhash123']['file_path'] == str(model_dir)
+
+
+def test_model_manager_removes_backup_after_completed_replacement(tmp_path):
+    model_dir = tmp_path / 'testhash123'
+    model_dir.mkdir()
+    (model_dir / 'new.keras').write_bytes(b'new model')
+    backup_dir = tmp_path / '@backup-testhash123'
+    backup_dir.mkdir()
+    (backup_dir / 'old.keras').write_bytes(b'old model')
+
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    assert (model_dir / 'new.keras').read_bytes() == b'new model'
+    assert not backup_dir.exists()
+    assert manager.metadata_store['testhash123']['file_path'] == str(model_dir)
+
+
+def test_model_manager_starts_when_completed_replacement_backup_cannot_be_removed(tmp_path):
+    model_dir = tmp_path / 'testhash123'
+    model_dir.mkdir()
+    (model_dir / 'new.keras').write_bytes(b'new model')
+    backup_dir = tmp_path / '@backup-testhash123'
+    backup_dir.mkdir()
+    (backup_dir / 'old.keras').write_bytes(b'old model')
+
+    with patch.object(ModelManager, '_remove_path', side_effect=OSError('simulated persistent cleanup failure')):
+        manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    assert (model_dir / 'new.keras').read_bytes() == b'new model'
+    assert (backup_dir / 'old.keras').read_bytes() == b'old model'
+    assert manager.metadata_store['testhash123']['file_path'] == str(model_dir)
+
+
 @patch('src.core.model_manager.tf.keras.models.load_model')
 def test_upload_model_replaces_existing_hash_and_invalidates_cached_model(mock_load_model, tmp_path):
     manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
@@ -247,3 +309,149 @@ def test_upload_model_replaces_existing_hash_and_invalidates_cached_model(mock_l
     assert prediction.tolist() == [[0.8, 0.2]]
     old_model.predict.assert_not_called()
     assert mock_load_model.call_count == 1
+
+
+def test_upload_model_restores_existing_model_when_staged_install_fails(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / 'old.keras').write_bytes(b'old model')
+
+    old_model = MagicMock()
+    old_metadata = {
+        'file_path': str(model_dir),
+        'used': '2024-04-27T12:00:00',
+    }
+    manager.model_cache[model_hash] = old_model
+    manager.metadata_store[model_hash] = old_metadata
+    real_replace = os.replace
+
+    def fail_staged_install(source, destination):
+        if Path(source).name.startswith(f'@upload-{model_hash}-') and Path(destination) == model_dir:
+            raise OSError('simulated staged install failure')
+        return real_replace(source, destination)
+
+    with patch('src.core.model_manager.os.replace', side_effect=fail_staged_install):
+        with pytest.raises(OSError, match='simulated staged install failure'):
+            manager.upload_model(_UploadFile(create_test_model_zip_bytes()), model_hash)
+
+    assert (model_dir / 'old.keras').read_bytes() == b'old model'
+    assert not (tmp_path / f'@backup-{model_hash}').exists()
+    assert manager.metadata_store[model_hash] == old_metadata
+    assert manager.model_cache[model_hash] is old_model
+
+
+def test_upload_model_preserves_existing_model_when_backup_rename_fails(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / 'old.keras').write_bytes(b'old model')
+    old_model = MagicMock()
+    old_metadata = {
+        'file_path': str(model_dir),
+        'used': '2024-04-27T12:00:00',
+    }
+    manager.model_cache[model_hash] = old_model
+    manager.metadata_store[model_hash] = old_metadata
+    real_replace = os.replace
+
+    def fail_backup_rename(source, destination):
+        if Path(source) == model_dir:
+            raise OSError('simulated backup rename failure')
+        return real_replace(source, destination)
+
+    with patch('src.core.model_manager.os.replace', side_effect=fail_backup_rename):
+        with pytest.raises(OSError, match='simulated backup rename failure'):
+            manager.upload_model(_UploadFile(create_test_model_zip_bytes()), model_hash)
+
+    assert (model_dir / 'old.keras').read_bytes() == b'old model'
+    assert not (tmp_path / f'@backup-{model_hash}').exists()
+    assert manager.metadata_store[model_hash] == old_metadata
+    assert manager.model_cache[model_hash] is old_model
+
+
+def test_upload_model_failed_install_for_new_hash_leaves_no_model_state(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    real_replace = os.replace
+
+    def fail_staged_install(source, destination):
+        if Path(source).name.startswith(f'@upload-{model_hash}-') and Path(destination) == model_dir:
+            raise OSError('simulated new model install failure')
+        return real_replace(source, destination)
+
+    with patch('src.core.model_manager.os.replace', side_effect=fail_staged_install):
+        with pytest.raises(OSError, match='simulated new model install failure'):
+            manager.upload_model(_UploadFile(create_test_model_zip_bytes()), model_hash)
+
+    assert not model_dir.exists()
+    assert not (tmp_path / f'@backup-{model_hash}').exists()
+    assert model_hash not in manager.metadata_store
+    assert model_hash not in manager.model_cache
+
+
+def test_upload_model_leaves_recoverable_backup_when_immediate_rollback_fails(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / 'old.keras').write_bytes(b'old model')
+    backup_dir = tmp_path / f'@backup-{model_hash}'
+    real_replace = os.replace
+
+    def fail_install_and_rollback(source, destination):
+        source_path = Path(source)
+        destination_path = Path(destination)
+        if source_path.name.startswith(f'@upload-{model_hash}-') and destination_path == model_dir:
+            raise OSError('simulated staged install failure')
+        if source_path == backup_dir and destination_path == model_dir:
+            raise OSError('simulated immediate rollback failure')
+        return real_replace(source, destination)
+
+    with patch('src.core.model_manager.os.replace', side_effect=fail_install_and_rollback):
+        with pytest.raises(OSError, match='Failed to install model testhash123 and restore its previous version'):
+            manager.upload_model(_UploadFile(create_test_model_zip_bytes()), model_hash)
+
+    assert not model_dir.exists()
+    assert (backup_dir / 'old.keras').read_bytes() == b'old model'
+
+    restarted_manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    assert (model_dir / 'old.keras').read_bytes() == b'old model'
+    assert not backup_dir.exists()
+    assert restarted_manager.metadata_store[model_hash]['file_path'] == str(model_dir)
+
+
+def test_upload_model_keeps_new_model_when_backup_cleanup_is_deferred(tmp_path):
+    manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_hash = 'testhash123'
+    model_dir = tmp_path / model_hash
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / 'old.keras').write_bytes(b'old model')
+    backup_dir = tmp_path / f'@backup-{model_hash}'
+    real_remove_path = manager._remove_path
+
+    def defer_backup_cleanup(path):
+        if Path(path) == backup_dir:
+            raise OSError('simulated backup cleanup failure')
+        return real_remove_path(path)
+
+    with patch.object(manager, '_remove_path', side_effect=defer_backup_cleanup):
+        response_message, response_status = manager.upload_model(
+            _UploadFile(create_test_model_zip_bytes()),
+            model_hash,
+        )
+
+    assert response_status == 200
+    assert response_message == 'Model uploaded successfully'
+    assert (model_dir / 'replacement-model.keras').read_bytes() == b'replacement content'
+    assert (backup_dir / 'old.keras').read_bytes() == b'old model'
+
+    restarted_manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+
+    assert not backup_dir.exists()
+    assert (model_dir / 'replacement-model.keras').read_bytes() == b'replacement content'
+    assert restarted_manager.metadata_store[model_hash]['file_path'] == str(model_dir)

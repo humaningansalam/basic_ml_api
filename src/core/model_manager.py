@@ -20,6 +20,8 @@ from src.common.metrics import get_metrics
 class ModelManager:
     _MODEL_HASH_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
     _STALE_MODEL_AGE_SECONDS = 7 * 24 * 60 * 60
+    _BACKUP_PREFIX = '@backup-'
+    _STAGING_PREFIX = '@upload-'
 
     def __init__(self, store_path: str, max_cache_size: int = 10, cleanup_interval_hours: Optional[int] = None, max_model_file_size: int = 100 * 1024 * 1024):
         self.store_path = store_path
@@ -43,13 +45,93 @@ class ModelManager:
             os.makedirs(self.store_path)
             return
 
+        self._recover_interrupted_uploads()
+
         for model_hash in os.listdir(self.store_path):
             model_folder_path = os.path.join(self.store_path, model_hash)
-            if os.path.isdir(model_folder_path):
-                self.metadata_store[model_hash] = {
-                    'file_path': model_folder_path,
-                    'used': utils.get_kr_time()
-                }
+            if not self._MODEL_HASH_PATTERN.fullmatch(model_hash):
+                continue
+            if not os.path.isdir(model_folder_path):
+                continue
+            if not self._contains_keras_file(model_folder_path):
+                self.logger.warning('Ignoring model directory without a .keras file: %s', model_folder_path)
+                continue
+
+            self.metadata_store[model_hash] = {
+                'file_path': model_folder_path,
+                'used': utils.get_kr_time()
+            }
+
+    def _contains_keras_file(self, model_folder_path: str) -> bool:
+        for root, _, files in os.walk(model_folder_path):
+            for file_name in files:
+                file_path = os.path.join(root, file_name)
+                if file_name.endswith('.keras') and os.path.isfile(file_path):
+                    return True
+        return False
+
+    def _backup_path(self, model_hash: str) -> str:
+        return os.path.join(self.store_path, f'{self._BACKUP_PREFIX}{model_hash}')
+
+    def _remove_path(self, path: str) -> None:
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        elif os.path.exists(path) or os.path.islink(path):
+            os.remove(path)
+
+    def _recover_interrupted_uploads(self) -> None:
+        for entry in os.listdir(self.store_path):
+            if not entry.startswith(self._BACKUP_PREFIX):
+                continue
+
+            model_hash = entry[len(self._BACKUP_PREFIX):]
+            if not self._MODEL_HASH_PATTERN.fullmatch(model_hash):
+                continue
+
+            backup_path = os.path.join(self.store_path, entry)
+            model_folder_path = os.path.join(self.store_path, model_hash)
+            if os.path.exists(model_folder_path):
+                try:
+                    self._remove_path(backup_path)
+                except OSError as cleanup_error:
+                    self.logger.warning('Could not remove leftover model backup %s: %s', backup_path, cleanup_error)
+                else:
+                    self.logger.warning('Removed leftover model backup after completed upload: %s', backup_path)
+            else:
+                os.replace(backup_path, model_folder_path)
+                self.logger.warning('Restored model backup after interrupted upload: %s', model_hash)
+
+    def _replace_model_directory(self, staging_dir: str, model_folder_path: str, model_hash: str) -> None:
+        backup_path = self._backup_path(model_hash)
+        had_existing_model = os.path.exists(model_folder_path)
+
+        if os.path.exists(backup_path) or os.path.islink(backup_path):
+            if had_existing_model:
+                self._remove_path(backup_path)
+            else:
+                os.replace(backup_path, model_folder_path)
+                had_existing_model = True
+
+        if had_existing_model:
+            os.replace(model_folder_path, backup_path)
+
+        try:
+            os.replace(staging_dir, model_folder_path)
+        except OSError:
+            if had_existing_model:
+                try:
+                    os.replace(backup_path, model_folder_path)
+                except OSError as rollback_error:
+                    raise OSError(
+                        f'Failed to install model {model_hash} and restore its previous version'
+                    ) from rollback_error
+            raise
+
+        if had_existing_model:
+            try:
+                self._remove_path(backup_path)
+            except OSError as cleanup_error:
+                self.logger.warning('Could not remove model backup %s: %s', backup_path, cleanup_error)
 
     def start_cleanup_scheduler(self) -> None:
         with self._cleanup_thread_lock:
@@ -187,7 +269,7 @@ class ModelManager:
 
         with model_dir_lock:
             os.makedirs(self.store_path, exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix=f'{model_hash}-upload-', dir=self.store_path) as staging_dir:
+            with tempfile.TemporaryDirectory(prefix=f'{self._STAGING_PREFIX}{model_hash}-', dir=self.store_path) as staging_dir:
                 temp_zip_path = os.path.join(staging_dir, 'temp.zip')
                 model_file.save(temp_zip_path)
 
@@ -234,18 +316,17 @@ class ModelManager:
                     if os.path.exists(temp_zip_path):
                         os.remove(temp_zip_path)
 
+                used_at = utils.get_kr_time()
+                self._replace_model_directory(staging_dir, model_folder_path, model_hash)
+
                 with self._state_lock:
                     if model_hash in self.model_cache:
                         del self.model_cache[model_hash]
                         self.metrics.set_model_cache_usage(len(self.model_cache))
 
-                    if os.path.exists(model_folder_path):
-                        shutil.rmtree(model_folder_path)
-                    shutil.move(staging_dir, model_folder_path)
-
                     self.metadata_store[model_hash] = {
                         'file_path': model_folder_path,
-                        'used': utils.get_kr_time()
+                        'used': used_at
                     }
 
         return 'Model uploaded successfully', 200

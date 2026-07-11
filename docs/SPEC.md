@@ -59,12 +59,15 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 - The service creates a directory under `MODEL_STORE_PATH` named by the supplied hash.
 - The uploaded ZIP is temporarily saved as `temp.zip` inside a staging directory.
 - ZIP contents are first validated and extracted into a temporary staging directory.
-- The target hash directory is then replaced entirely so stale files are removed.
+- The target hash directory is replaced through a same-filesystem backup-and-rename transaction so stale files are removed without discarding the last working model first.
+- If installing the staged directory fails, the previous directory is restored and its metadata and cache entry remain usable.
+- If the process stops during replacement, startup restores an unfinished backup or removes a leftover backup after a completed install.
 - `temp.zip` is removed after extraction attempt.
 - If `hash` already exists, the old in-memory cached model is invalidated so the next `/predict` for that hash loads from disk again.
 - If a hash is uploaded again, the existing directory contents are replaced and only the new upload is retained.
 - Model metadata is stored in memory with `file_path` and `used` timestamp.
 - Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and `{"error": "Uploaded file too large"}`.
+- On startup, only valid hash directories containing a regular `.keras` file are registered; internal staging and incomplete directories are ignored.
 
 ## Model Lookup
 
