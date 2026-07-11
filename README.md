@@ -8,26 +8,62 @@
 - **모니터링**: Prometheus 호환 리소스(CPU, RAM, Cache) 메트릭 제공
 - **자동 정리**: 오랫동안 사용되지 않은 모델 자동 삭제
 
-## 시작하기
+## 빠른 시작
 
 ### 전제 조건
 이 프로젝트는 Python 3.11 기반으로 작성되었습니다.
 
-### 설치
-이 저장소를 클론합니다.
+### 1. 설치
+
 ```bash
 git clone https://github.com/humaningansalam/basic_ml_api.git
-```
-
-## 필요한 패키지를 설치합니다.
-```bash
+cd basic_ml_api
 uv sync
 ```
 
-## 사용법
-서버를 시작합니다.
+### 2. 데모 모델 생성
+
+아래 스크립트는 입력값에 `2`를 곱하는 실제 Keras 모델을 `demo-model.zip`으로 생성합니다.
+
+```bash
+uv run python examples/create_demo_model.py
+# Created /path/to/basic_ml_api/demo-model.zip
+```
+
+### 3. 서버 시작
+
 ```bash
 uv run python -m src.main
+```
+
+다음 명령은 별도 터미널에서 실행합니다.
+
+### 4. 업로드 및 예측
+
+```bash
+curl --fail \
+  --form "model_file=@demo-model.zip" \
+  "http://127.0.0.1:5000/upload_model?hash=demo-model-v1"
+# {"message":"Model uploaded successfully"}
+
+curl --fail \
+  "http://127.0.0.1:5000/get_model?hash=demo-model-v1"
+# {"message":{"file_path":".../demo-model-v1","used":"..."}}
+
+curl --fail \
+  --header "Content-Type: application/json" \
+  --data '[[3.0]]' \
+  "http://127.0.0.1:5000/predict?hash=demo-model-v1"
+# {"prediction":[[6.0]]}
+```
+
+### 5. 운영 엔드포인트 확인
+
+```bash
+curl --fail http://127.0.0.1:5000/health
+# Healthy
+
+curl --fail http://127.0.0.1:5000/metrics
 ```
 
 ### Docker Compose
