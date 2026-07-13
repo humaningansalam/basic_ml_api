@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from unittest.mock import patch, MagicMock
 from collections import OrderedDict
 
@@ -72,6 +73,17 @@ def test_predict_malformed_json_body_returns_json_error(client):
     assert response.status_code == 400
     assert response.content_type == 'application/json'
     assert response.json['error'] == 'Missing hash or data'
+
+
+@pytest.mark.parametrize('payload', [{'x': 1}, 'abc', 1, True])
+def test_predict_non_array_json_returns_client_error(client, payload):
+    with patch.object(client.application.model_manager, 'predict') as mock_predict:
+        response = client.post('/predict?hash=testhash123', json=payload)
+
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert response.json['error'] == 'Prediction data must be a JSON array'
+    mock_predict.assert_not_called()
 
 
 def test_predict_model_not_found(client, get_metric_value):

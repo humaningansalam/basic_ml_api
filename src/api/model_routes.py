@@ -62,6 +62,10 @@ def predict():
         metrics.increment_error_count('predict_missing_data')
         return jsonify({'error': 'Missing hash or data'}), 400
 
+    if not isinstance(data, list):
+        metrics.increment_error_count('predict_invalid_data')
+        return jsonify({'error': 'Prediction data must be a JSON array'}), 400
+
     try:
         # 예측 수행 (ModelManager 위임)
         pred, status = current_app.model_manager.predict(model_hash, np.array(data))

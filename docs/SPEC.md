@@ -107,6 +107,7 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Error Behavior
 
 - Missing `hash` or empty JSON data: `400`, `{"error": "Missing hash or data"}`
+- Non-array JSON data: `400`, `{"error": "Prediction data must be a JSON array"}`
 - Unknown model hash: `404`, `{"error": "Model not found"}`
 - TensorFlow loading or prediction failure: `500`, `{"error": "Internal error during prediction"}`
 
