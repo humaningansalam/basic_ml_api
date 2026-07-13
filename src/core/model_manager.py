@@ -276,16 +276,17 @@ class ModelManager:
                 try:
                     try:
                         with ZipFile(temp_zip_path, 'r') as zip_ref:
-                            names = zip_ref.namelist()
+                            members = zip_ref.infolist()
                             base_path = Path(staging_dir).resolve()
                             has_keras = False
                             total_uncompressed_size = 0
                             max_entries = 5000
 
-                            if len(names) > max_entries:
-                                raise ValueError(f'Zip contains too many entries: {len(names)} (max {max_entries})')
+                            if len(members) > max_entries:
+                                raise ValueError(f'Zip contains too many entries: {len(members)} (max {max_entries})')
 
-                            for member in names:
+                            for member_info in members:
+                                member = member_info.filename
                                 member_path = Path(member)
                                 member_text = member.replace('\\', '/')
                                 is_windows_drive_path = len(member) >= 2 and member[1] == ':'
@@ -301,7 +302,7 @@ class ModelManager:
                                 if member_text.endswith('.keras'):
                                     has_keras = True
 
-                                total_uncompressed_size += zip_ref.getinfo(member).file_size
+                                total_uncompressed_size += member_info.file_size
 
                             if total_uncompressed_size > self.max_model_file_size:
                                 raise ValueError(f'Uncompressed size too large: {total_uncompressed_size} bytes')

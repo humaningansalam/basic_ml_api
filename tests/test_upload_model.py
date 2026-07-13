@@ -27,6 +27,12 @@ def create_test_model_zip_bytes():
     return memory_file.getvalue()
 
 
+def create_zip_info(filename, file_size=100):
+    zip_info = zipfile.ZipInfo(filename)
+    zip_info.file_size = file_size
+    return zip_info
+
+
 class _UploadFile:
     def __init__(self, content):
         self._content = content
@@ -42,8 +48,7 @@ def test_upload_model_success(mock_zipfile, mock_save, client):
     # ZipFile 동작 모킹
     mock_zip_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
-    mock_zip_instance.namelist.return_value = ['model.keras']
-    mock_zip_instance.getinfo.return_value = MagicMock(file_size=100)
+    mock_zip_instance.infolist.return_value = [create_zip_info('model.keras')]
 
     test_zip = create_test_model_zip()
 
@@ -86,8 +91,7 @@ def test_upload_model_bad_zip_is_client_error(mock_zipfile, mock_save, client):
 def test_upload_model_missing_keras_is_client_error(mock_zipfile, mock_save, client):
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
-    mock_zip.namelist.return_value = ['model.txt']
-    mock_zip.getinfo.return_value = MagicMock(file_size=100)
+    mock_zip.infolist.return_value = [create_zip_info('model.txt')]
     mock_zipfile.return_value = mock_zip
 
     response = client.post('/upload_model?hash=testhash123',
@@ -103,8 +107,10 @@ def test_upload_model_missing_keras_is_client_error(mock_zipfile, mock_save, cli
 def test_upload_model_rejects_traversal_entry(mock_zipfile, mock_save, client):
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
-    mock_zip.namelist.return_value = ['../escape.txt', 'safe.keras']
-    mock_zip.getinfo.return_value = MagicMock(file_size=100)
+    mock_zip.infolist.return_value = [
+        create_zip_info('../escape.txt'),
+        create_zip_info('safe.keras'),
+    ]
     mock_zipfile.return_value = mock_zip
 
     response = client.post('/upload_model?hash=testhash123',
@@ -156,6 +162,35 @@ def test_upload_model_oversized_file_payload_is_rejected(client):
 
     assert response.status_code == 413
     assert response.json['error'] == 'Uploaded file too large'
+
+
+def test_upload_model_counts_duplicate_entries_toward_uncompressed_limit(tmp_path):
+    class SmallArchiveLimitConfig(Config):
+        TESTING = True
+        START_BACKGROUND_MONITORING = False
+        MODEL_STORE_PATH = str(tmp_path / 'models')
+        MODEL_CLEANUP_INTERVAL = 0
+        MAX_MODEL_FILE_SIZE = 512
+
+    archive = io.BytesIO()
+    with pytest.warns(UserWarning, match='Duplicate name'):
+        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr('model.keras', b'A' * 10_000)
+            zip_file.writestr('model.keras', b'B')
+    archive.seek(0)
+
+    assert len(archive.getvalue()) < SmallArchiveLimitConfig.MAX_MODEL_FILE_SIZE
+
+    app = create_app(SmallArchiveLimitConfig)
+    response = app.test_client().post(
+        '/upload_model?hash=testhash123',
+        data={'model_file': (archive, 'model.zip')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert response.json['error'] == 'Uncompressed size too large: 10001 bytes'
+    assert not (Path(SmallArchiveLimitConfig.MODEL_STORE_PATH) / 'testhash123').exists()
 
 
 @pytest.mark.parametrize(
