@@ -178,13 +178,13 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 
 The test suite currently covers:
 
-- Health endpoint response.
-- Metrics endpoint content and metric names.
-- Successful model upload with a ZIP containing `.keras`.
-- Upload validation for missing data.
-- Successful prediction with mocked TensorFlow loading.
-- Prediction validation for missing, empty, malformed, and unknown-model requests.
+- Deterministic demo-model archive creation and real Keras loading.
+- Health and metrics endpoint responses, including exact Prometheus metric names.
+- Model upload success plus hash, payload-size, expanded-size, ZIP-entry, traversal, and missing-model validation.
+- Atomic replacement, cache invalidation, interrupted-upload recovery, and restart directory filtering.
+- Prediction success plus missing, empty, malformed, non-array, and unknown-model requests.
 - Model lookup success, missing hash, and unknown model behavior.
+- LRU eviction, stale-model deletion, cleanup scheduling, and prediction/upload cleanup coordination.
 
 Run tests from the repository root with:
 
