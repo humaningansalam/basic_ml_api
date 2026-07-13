@@ -14,6 +14,8 @@ class PMetrics(BaseMetrics):
         self.predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
         self.cache_hits = Counter('cache_hits', 'Number of cache hits')
         self.cache_misses = Counter('cache_misses', 'Number of cache misses')
+        # A labeled counter has no exported series until its first child exists.
+        self.error_count.labels(type='unknown')
 
     @classmethod
     def get_instance(cls):
