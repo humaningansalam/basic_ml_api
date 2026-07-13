@@ -159,9 +159,9 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Expected Metrics
 
 - `model_cache_usage`
-- `predictions_completed`
-- `cache_hits`
-- `cache_misses`
+- `predictions_completed_total`
+- `cache_hits_total`
+- `cache_misses_total`
 - `ml_api_errors_total`
 - `ml_api_cpu_usage_percent`
 - `ml_api_ram_usage_mb`

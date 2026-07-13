@@ -90,8 +90,8 @@ docker compose config
 - `ml_api_cpu_usage_percent`: CPU 사용량 (%)
 - `ml_api_ram_usage_mb`: RAM 사용량 (MB)
 - `model_cache_usage`: 현재 캐시된 모델 수
-- `cache_hits` / `cache_misses`: 캐시 적중/미적중 횟수
-- `predictions_completed`: 예측 완료 횟수
+- `cache_hits_total` / `cache_misses_total`: 캐시 적중/미적중 횟수
+- `predictions_completed_total`: 예측 완료 횟수
 - `ml_api_errors_total`: 에러 발생 횟수
 
 
