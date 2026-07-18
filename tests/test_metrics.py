@@ -1,3 +1,6 @@
+from src.common.errors import ErrorCode
+
+
 def test_metrics_endpoint(client, get_metric_value):
     response = client.get('/metrics')
     assert response.status_code == 200
@@ -11,6 +14,6 @@ def test_metrics_endpoint(client, get_metric_value):
     assert 'cache_misses_total' in metrics_data
 
     assert 'ml_api_errors_total' in metrics_data
-    assert get_metric_value('ml_api_errors', {'type': 'unknown'}) == 0
+    assert get_metric_value('ml_api_errors', {'type': ErrorCode.INTERNAL_ERROR.value}) is not None
     assert 'ml_api_cpu_usage_percent' in metrics_data
     assert 'ml_api_ram_usage_mb' in metrics_data

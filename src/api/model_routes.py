@@ -1,11 +1,18 @@
-#api/model_routes
+import json
+
 import numpy as np
-from flask import Blueprint, request, jsonify, current_app
-from zipfile import BadZipFile
+from flask import Blueprint, current_app, jsonify, request
+
+from src.common.errors import ApplicationError, ErrorCode
 from src.common.metrics import get_metrics
+
 
 model_bp = Blueprint('model', __name__)
 metrics = get_metrics()
+
+
+def _reject_non_standard_json_number(value: str) -> None:
+    raise ValueError(f'Non-standard JSON numeric token: {value}')
 
 
 def _get_uploaded_file_size(model_file) -> int:
@@ -18,88 +25,66 @@ def _get_uploaded_file_size(model_file) -> int:
         stream.seek(current_position)
 
 
-@model_bp.route('/upload_model', methods=['POST'])
-def upload_model():
-    """모델 업로드 엔드포인트"""
-    model_file = request.files.get('model_file')
+def _require_model_hash() -> str:
     model_hash = request.args.get('hash')
+    if not model_hash:
+        raise ApplicationError(ErrorCode.MODEL_HASH_REQUIRED)
+    return model_hash
 
-    # 필수 데이터 누락 확인
-    if not model_file or not model_hash:
-        metrics.increment_error_count('upload_model_missing_data')
-        return jsonify({'error': 'Missing data (file or hash)'}), 400
 
-    if _get_uploaded_file_size(model_file) > current_app.config['MAX_MODEL_FILE_SIZE']:
-        metrics.increment_error_count('upload_model_too_large')
-        return jsonify({'error': 'Uploaded file too large'}), 413
+def _parse_prediction_data() -> np.ndarray:
+    if not request.is_json:
+        raise ApplicationError(ErrorCode.PREDICTION_DATA_REQUIRED)
+    if not request.get_data(cache=True):
+        raise ApplicationError(ErrorCode.PREDICTION_DATA_REQUIRED)
 
     try:
-        # ModelManager를 통해 모델 저장 및 압축 해제
-        msg, status = current_app.model_manager.upload_model(model_file, model_hash)
-        return jsonify({'message': msg}), status
+        data = json.loads(
+            request.get_data(cache=True),
+            parse_constant=_reject_non_standard_json_number,
+        )
+    except RecursionError as error:
+        raise ApplicationError(ErrorCode.INVALID_PREDICTION_DATA) from error
+    except (UnicodeDecodeError, ValueError) as error:
+        raise ApplicationError(ErrorCode.MALFORMED_JSON) from error
 
-    except ValueError as e:
-        metrics.increment_error_count('upload_model_error')
-        return jsonify({'error': str(e)}), 400
+    if not isinstance(data, list):
+        raise ApplicationError(ErrorCode.PREDICTION_DATA_NOT_ARRAY)
+    if not data:
+        raise ApplicationError(ErrorCode.PREDICTION_DATA_EMPTY)
 
-    except BadZipFile:
-        metrics.increment_error_count('upload_model_error')
-        return jsonify({'error': 'Invalid zip file'}), 400
+    try:
+        return np.asarray(data)
+    except ValueError as error:
+        raise ApplicationError(ErrorCode.INVALID_PREDICTION_DATA) from error
 
-    except Exception as e:
-        metrics.increment_error_count('upload_model_error')
-        current_app.logger.error(f"Upload failed: {e}")
-        return jsonify({'error': str(e)}), 500
+
+@model_bp.route('/upload_model', methods=['POST'])
+def upload_model():
+    model_file = request.files.get('model_file')
+    if model_file is None or not model_file.filename:
+        raise ApplicationError(ErrorCode.MODEL_FILE_REQUIRED)
+    model_hash = _require_model_hash()
+
+    max_file_size = current_app.config['MAX_MODEL_FILE_SIZE']
+    if _get_uploaded_file_size(model_file) > max_file_size:
+        raise ApplicationError(ErrorCode.UPLOAD_TOO_LARGE, {'max_bytes': max_file_size})
+
+    result = current_app.model_manager.upload_model(model_file, model_hash)
+    return jsonify({'data': result.to_dict()}), 200
+
 
 @model_bp.route('/predict', methods=['POST'])
 def predict():
-    """예측 수행 엔드포인트"""
-    model_hash = request.args.get('hash')
-    data = request.get_json(silent=True)
-    
-    # 필수 파라미터 확인
-    if not model_hash or not data:
-        metrics.increment_error_count('predict_missing_data')
-        return jsonify({'error': 'Missing hash or data'}), 400
+    model_hash = _require_model_hash()
+    data = _parse_prediction_data()
+    result = current_app.model_manager.predict(model_hash, data)
+    metrics.increment_predictions_completed()
+    return jsonify({'data': result.to_dict()}), 200
 
-    if not isinstance(data, list):
-        metrics.increment_error_count('predict_invalid_data')
-        return jsonify({'error': 'Prediction data must be a JSON array'}), 400
-
-    try:
-        # 예측 수행 (ModelManager 위임)
-        pred, status = current_app.model_manager.predict(model_hash, np.array(data))
-        metrics.increment_predictions_completed()
-        return jsonify({'prediction': pred.tolist()}), status
-
-    except KeyError:
-        metrics.increment_error_count('predict_model_not_found')
-        return jsonify({'error': 'Model not found'}), 404
-
-    except Exception as e:
-        metrics.increment_error_count('predict_error')
-        current_app.logger.error(f"Prediction error: {e}")
-        return jsonify({'error': 'Internal error during prediction'}), 500
 
 @model_bp.route('/get_model', methods=['GET'])
 def get_model():
-    """모델 존재 여부 및 정보 확인 엔드포인트"""
-    model_hash = request.args.get('hash')
-    
-    if not model_hash:
-        metrics.increment_error_count('get_model_missing_hash')  
-        return jsonify({'error': 'Model hash is required'}), 400
-
-    try:
-        # 모델 정보 조회
-        model_info = current_app.model_manager.get_model_info(model_hash)
-        return jsonify({'message': model_info}), 200
-
-    except KeyError:
-        metrics.increment_error_count('get_model_not_found') 
-        return jsonify({'error': 'No such model'}), 404
-
-    except Exception as e:
-        metrics.increment_error_count('get_model_error')  
-        current_app.logger.error(f"Error retrieving model info: {e}")
-        return jsonify({'error': str(e)}), 500
+    model_hash = _require_model_hash()
+    model_info = current_app.model_manager.get_model_info(model_hash)
+    return jsonify({'data': model_info.to_dict()}), 200

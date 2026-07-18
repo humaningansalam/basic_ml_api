@@ -44,31 +44,31 @@ uv run python -m src.main
 curl --fail \
   --form "model_file=@demo-model.zip" \
   "http://127.0.0.1:5000/upload_model?hash=demo-model-v1"
-# {"message":"Model uploaded successfully"}
+# {"data":{"model_hash":"demo-model-v1","replaced":false}}
 
 curl --fail \
   "http://127.0.0.1:5000/get_model?hash=demo-model-v1"
-# {"message":{"file_path":".../demo-model-v1","used":"..."}}
+# {"data":{"file_path":".../demo-model-v1","model_hash":"demo-model-v1","used":"..."}}
 
 curl --fail \
   --header "Content-Type: application/json" \
   --data '[[3.0]]' \
   "http://127.0.0.1:5000/predict?hash=demo-model-v1"
-# {"prediction":[[6.0]]}
+# {"data":{"model_hash":"demo-model-v1","prediction":[[6.0]]}}
 ```
 
 ### 5. 운영 엔드포인트 확인
 
 ```bash
 curl --fail http://127.0.0.1:5000/health
-# Healthy
+# {"data":{"status":"healthy"}}
 
 curl --fail http://127.0.0.1:5000/metrics
 ```
 
 ### Docker Compose
 Docker Compose defaults to `VERSION=dev`, so a fresh checkout can render configuration without a local `.env` file.
-If you want to override the image tag or app settings locally, add a `.env` file in `repo/`.
+If you want to override the image tag or app settings locally, add a `.env` file in the repository root.
 ```bash
 docker compose config
 ```
@@ -85,6 +85,18 @@ docker compose config
   - Query: `hash`
 - **상태 확인**: `GET /health`
 - **메트릭 조회**: `GET /metrics`
+
+오류 응답은 문구가 아니라 안정적인 `error.code`로 분기합니다.
+
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "message": "The requested model was not found.",
+    "details": {"model_hash": "demo-model-v1"}
+  }
+}
+```
 
 ## Prometheus 메트릭
 - `ml_api_cpu_usage_percent`: CPU 사용량 (%)

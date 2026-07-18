@@ -6,14 +6,15 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from src.core.model_manager import ModelManager
+from src.core.model_types import ModelMetadata
 
 
 def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
     manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
-    manager.metadata_store['testhash123'] = {
-        'file_path': str(tmp_path / 'testhash123'),
-        'used': '2024-04-27T12:00:00',
-    }
+    manager.metadata_store['testhash123'] = ModelMetadata(
+        file_path=str(tmp_path / 'testhash123'),
+        used=datetime(2024, 4, 27, 12, 0),
+    )
     manager.model_cache = OrderedDict()
 
     load_started = threading.Event()
@@ -47,13 +48,12 @@ def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
         reader.join(timeout=5)
 
         assert 'value' in info_result
-        assert info_result['value']['file_path'] == str(tmp_path / 'testhash123')
+        assert info_result['value'].file_path == str(tmp_path / 'testhash123')
 
         release_load.set()
         thread.join(timeout=5)
 
-    assert prediction['value'][1] == 200
-    assert prediction['value'][0].tolist() == [[0.9, 0.1]]
+    assert prediction['value'].values == [[0.9, 0.1]]
 
 
 def test_predict_blocks_stale_cleanup_until_used_timestamp_refreshes(tmp_path):
@@ -62,10 +62,10 @@ def test_predict_blocks_stale_cleanup_until_used_timestamp_refreshes(tmp_path):
     model_dir = tmp_path / model_hash
     model_dir.mkdir()
     (model_dir / 'model.keras').write_bytes(b'model')
-    manager.metadata_store[model_hash] = {
-        'file_path': str(model_dir),
-        'used': datetime(2024, 1, 1),
-    }
+    manager.metadata_store[model_hash] = ModelMetadata(
+        file_path=str(model_dir),
+        used=datetime(2024, 1, 1),
+    )
     manager.model_cache = OrderedDict()
 
     stale_cutoff = datetime(2025, 1, 1)
@@ -119,11 +119,10 @@ def test_predict_blocks_stale_cleanup_until_used_timestamp_refreshes(tmp_path):
         cleanup_thread.join(timeout=5)
 
     assert cleanup_finished.is_set()
-    assert cleanup_result['value'] is None
-    assert prediction['value'][1] == 200
-    assert prediction['value'][0].tolist() == [[0.9, 0.1]]
+    assert cleanup_result['value'].removed_model_hashes == ()
+    assert prediction['value'].values == [[0.9, 0.1]]
     assert (model_dir / 'model.keras').exists()
-    assert manager.metadata_store[model_hash]['used'] == fresh_used
+    assert manager.metadata_store[model_hash].used == fresh_used
 
 
 def test_upload_and_cleanup_coordinate_on_same_model_directory(tmp_path):
@@ -132,13 +131,13 @@ def test_upload_and_cleanup_coordinate_on_same_model_directory(tmp_path):
     model_dir = tmp_path / model_hash
     model_dir.mkdir()
     (model_dir / 'stale.keras').write_bytes(b'stale-model')
-    manager.metadata_store[model_hash] = {
-        'file_path': str(model_dir),
-        'used': '2024-04-27T12:00:00',
-    }
+    manager.metadata_store[model_hash] = ModelMetadata(
+        file_path=str(model_dir),
+        used=datetime(2024, 4, 27, 12, 0),
+    )
 
-    stale_cutoff = '2025-01-01T00:00:00'
-    fresh_used = '2025-02-01T00:00:00'
+    stale_cutoff = datetime(2025, 1, 1)
+    fresh_used = datetime(2025, 2, 1)
     cleanup_paused = threading.Event()
     cleanup_may_continue = threading.Event()
     cleanup_finished = threading.Event()
@@ -175,20 +174,20 @@ def test_upload_and_cleanup_coordinate_on_same_model_directory(tmp_path):
         assert cleanup_paused.wait(timeout=5)
 
         with manager._state_lock:
-            manager.metadata_store[model_hash] = {
-                'file_path': str(model_dir),
-                'used': fresh_used,
-            }
-            metadata_snapshot.update(manager.metadata_store[model_hash])
+            manager.metadata_store[model_hash] = ModelMetadata(
+                file_path=str(model_dir),
+                used=fresh_used,
+            )
+            metadata_snapshot['value'] = manager.metadata_store[model_hash]
         (model_dir / 'model.keras').write_bytes(b'fresh-model')
 
         cleanup_may_continue.set()
         cleanup_thread.join(timeout=5)
 
     assert cleanup_finished.is_set()
-    assert cleanup_result['value'] is None
+    assert cleanup_result['value'].removed_model_hashes == ()
     assert (model_dir / 'model.keras').exists()
-    assert manager.metadata_store[model_hash] == metadata_snapshot
+    assert manager.metadata_store[model_hash] == metadata_snapshot['value']
 
 
 def test_cleanup_scheduler_start_is_idempotent_under_concurrency(tmp_path):
