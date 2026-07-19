@@ -94,7 +94,16 @@ def register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_entity_too_large(error: RequestEntityTooLarge):
-        if request.endpoint == 'model.upload_model':
+        content_length = request.content_length
+        max_content_length = app.config.get('MAX_CONTENT_LENGTH')
+        is_oversized_upload = (
+            request.endpoint == 'model.upload_model'
+            and content_length is not None
+            and max_content_length is not None
+            and content_length > max_content_length
+        )
+
+        if is_oversized_upload:
             application_error = ApplicationError(
                 ErrorCode.UPLOAD_TOO_LARGE,
                 {'max_bytes': app.config['MAX_MODEL_FILE_SIZE']},
