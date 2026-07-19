@@ -3,6 +3,8 @@ from his_mon import BaseMetrics
 from prometheus_client import Counter, Gauge
 import threading
 
+from src.common.errors import ErrorCode
+
 class PMetrics(BaseMetrics):
     _lock = threading.Lock()
     _instance = None
@@ -14,6 +16,8 @@ class PMetrics(BaseMetrics):
         self.predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
         self.cache_hits = Counter('cache_hits', 'Number of cache hits')
         self.cache_misses = Counter('cache_misses', 'Number of cache misses')
+        # A labeled counter has no exported series until its first child exists.
+        self.error_count.labels(type=ErrorCode.INTERNAL_ERROR.value)
 
     @classmethod
     def get_instance(cls):
@@ -24,8 +28,8 @@ class PMetrics(BaseMetrics):
         return cls._instance
 
     # Metric 메서드들
-    def increment_error_count(self, error_type):
-        self.error_count.labels(type=error_type).inc()
+    def increment_error_count(self, error_code: ErrorCode):
+        self.error_count.labels(type=error_code.value).inc()
 
     def increment_predictions_completed(self):
         self.predictions_completed.inc()

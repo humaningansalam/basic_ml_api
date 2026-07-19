@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml uv.lock* ./
 
-RUN uv sync --frozen --python 3.11 --no-install-project && \
+RUN uv sync --frozen --python 3.11 --no-default-groups --no-install-project && \
     if [ "$INSTALL_DEV" = "true" ]; then \
         uv sync --frozen --python 3.11 --group dev --no-install-project; \
     fi
@@ -30,4 +30,4 @@ ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "src.main:create_app()"]
+CMD ["gunicorn", "--no-control-socket", "-w", "1", "-b", "0.0.0.0:5000", "src.main:create_app()"]

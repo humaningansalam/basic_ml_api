@@ -14,6 +14,24 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 - `GET /health`
 - `GET /metrics`
 
+## Response Contracts
+
+Successful JSON endpoints return a `data` object. Errors use one schema and a stable enum-backed code:
+
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "message": "The requested model was not found.",
+    "details": {"model_hash": "demo-model-v1"}
+  }
+}
+```
+
+Clients must branch on `error.code`, not on the human-readable `message`. Error metrics use the same code as the `type` label.
+Unknown routes return `404` with code `route_not_found`; unsupported methods return `405` with code `method_not_allowed`.
+Other framework-level HTTP rejections preserve their HTTP status, use code `http_error`, and include the status in `error.details.status`.
+
 ## Runtime Configuration
 
 | Variable | Purpose | Default |
@@ -38,33 +56,42 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 
 - Content type: `multipart/form-data`
 - Multipart field: `model_file`
-- Query parameter: `hash`
+- Query parameter: `hash` (`8` to `128` ASCII letters, digits, `.`, `_`, or `-`)
 - Uploaded file format: ZIP archive containing at least one `.keras` file
 
 ### Success Response
 
 - Status: `200`
-- Body: `{"message": "Model uploaded successfully"}`
+- Body: `{"data": {"model_hash": "...", "replaced": false}}`
 
 ### Error Behavior
 
-- Missing `model_file` or `hash`: `400`, `{"error": "Missing data (file or hash)"}`
-- Invalid hash: `400`, `{"error": "Invalid model hash"}`
-- Invalid ZIP or unsafe zip entry: `400`, error message body
-- Missing `.keras`: `400`, `{"error": "No .keras file in zip"}`
-- Storage failure: `500`, error message body
+- Missing `model_file`: `400`, code `model_file_required`
+- Missing `hash`: `400`, code `model_hash_required`
+- Invalid hash: `400`, code `invalid_model_hash`
+- Uploaded payload exceeds `MAX_MODEL_FILE_SIZE`: `413`, code `upload_too_large`
+- Invalid ZIP: `400`, code `invalid_zip`
+- Too many ZIP entries: `400`, code `zip_entry_limit_exceeded`
+- Unsafe ZIP path: `400`, code `unsafe_zip_entry`
+- Expanded archive exceeds `MAX_MODEL_FILE_SIZE`: `400`, code `uncompressed_size_exceeded`
+- Missing `.keras`: `400`, code `model_artifact_required`
+- Storage failure: `500`, code `model_storage_failed`; internal exception text is not exposed
 
 ### Storage Behavior
 
 - The service creates a directory under `MODEL_STORE_PATH` named by the supplied hash.
-- The uploaded ZIP is temporarily saved as `temp.zip` inside a staging directory.
-- ZIP contents are first validated and extracted into a temporary staging directory.
-- The target hash directory is then replaced entirely so stale files are removed.
-- `temp.zip` is removed after extraction attempt.
+- The uploaded ZIP is kept outside the extraction directory inside a temporary upload workspace, so archive member names cannot overwrite the service's own upload file.
+- ZIP contents are first validated and extracted into a dedicated staging subdirectory.
+- The target hash directory is replaced through a same-filesystem backup-and-rename transaction so stale files are removed without discarding the last working model first.
+- If installing the staged directory fails, the previous directory is restored and its metadata and cache entry remain usable.
+- If the process stops during replacement, startup restores an unfinished backup or removes a leftover backup after a completed install.
+- The temporary uploaded ZIP is removed after the extraction attempt.
+- Flask bounds the total request body to `MAX_MODEL_FILE_SIZE` plus 1 MiB of multipart overhead, while the upload endpoint separately enforces the exact `model_file` stream limit.
 - If `hash` already exists, the old in-memory cached model is invalidated so the next `/predict` for that hash loads from disk again.
 - If a hash is uploaded again, the existing directory contents are replaced and only the new upload is retained.
 - Model metadata is stored in memory with `file_path` and `used` timestamp.
-- Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and `{"error": "Uploaded file too large"}`.
+- Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and code `upload_too_large`.
+- On startup, abandoned internal `@upload-...` workspaces are removed so interrupted uploads do not accumulate on the persistent volume; only valid hash directories containing a regular `.keras` file are registered, and other incomplete directories are ignored.
 
 ## Model Lookup
 
@@ -75,13 +102,13 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Success Response
 
 - Status: `200`
-- Body contains the stored metadata under `message`.
+- Body: `{"data": {"model_hash": "...", "file_path": "...", "used": "ISO-8601 timestamp"}}`
 
 ### Error Behavior
 
-- Missing `hash`: `400`, `{"error": "Model hash is required"}`
-- Unknown hash: `404`, `{"error": "No such model"}`
-- Unexpected lookup failure: `500`, error message body
+- Missing `hash`: `400`, code `model_hash_required`
+- Unknown hash: `404`, code `model_not_found`
+- Unexpected failure: `500`, code `internal_error`; internal exception text is not exposed
 
 ## Prediction
 
@@ -98,14 +125,22 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Success Response
 
 - Status: `200`
-- Body: `{"prediction": [...]}`
+- Body: `{"data": {"model_hash": "...", "prediction": [...]}}`
 - Prediction output is converted from NumPy/TensorFlow output to JSON lists.
+- Multi-output list or object structures preserve their nesting, with each NumPy/TensorFlow leaf converted to JSON-compatible values.
 
 ### Error Behavior
 
-- Missing `hash` or empty JSON data: `400`, `{"error": "Missing hash or data"}`
-- Unknown model hash: `404`, `{"error": "Model not found"}`
-- TensorFlow loading or prediction failure: `500`, `{"error": "Internal error during prediction"}`
+- Missing `hash`: `400`, code `model_hash_required`
+- Missing JSON body: `400`, code `prediction_data_required`
+- Malformed JSON: `400`, code `malformed_json`
+- Non-array JSON: `400`, code `prediction_data_not_array`
+- Empty array: `400`, code `prediction_data_empty`
+- Ragged or otherwise invalid array shape: `400`, code `invalid_prediction_data`
+- Unknown model hash: `404`, code `model_not_found`
+- Missing stored artifact: `500`, code `model_artifact_unavailable`
+- Unsupported or non-finite model output: `500`, code `prediction_failed`
+- TensorFlow loading or prediction failure: `500`, code `prediction_failed`
 
 ### Model Loading Behavior
 
@@ -122,12 +157,13 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 - Default maximum size: 10 models.
 - When the cache is full, the least-recently-used model is evicted before loading a new model.
 - Cache state is process-local and is not shared across multiple workers.
+- Per-hash coordination locks are retained only while operations use them, so rejected or deleted hashes do not accumulate process state.
 
 ## Stale Model Cleanup
 
 - A background daemon thread runs cleanup on each `ModelManager` instance.
 - Cleanup removes models whose `used` timestamp is older than one week.
-- Cleanup deletes the model directory from disk, removes metadata, and removes cached model instances.
+- Cleanup removes the model directory and any deferred replacement backup before removing metadata and cached model instances, so a later restart cannot restore stale data.
 - Cleanup interval is configurable through `MODEL_CLEANUP_INTERVAL`.
 
 ## Health Endpoint
@@ -139,7 +175,7 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Success Response
 
 - Status: `200`
-- Body: `Healthy`
+- Body: `{"data": {"status": "healthy"}}`
 
 ## Metrics Endpoint
 
@@ -155,16 +191,16 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 ### Expected Metrics
 
 - `model_cache_usage`
-- `predictions_completed`
-- `cache_hits`
-- `cache_misses`
+- `predictions_completed_total`
+- `cache_hits_total`
+- `cache_misses_total`
 - `ml_api_errors_total`
 - `ml_api_cpu_usage_percent`
 - `ml_api_ram_usage_mb`
 
 ## Deployment Notes
 
-- The Docker image runs Gunicorn with one worker: `gunicorn -w 1 -b 0.0.0.0:5000 src.main:create_app()`.
+- The Docker image runs Gunicorn with one worker and disables the unused control socket: `gunicorn --no-control-socket -w 1 -b 0.0.0.0:5000 src.main:create_app()`.
 - Docker Compose maps host port `12021` to container port `5000`.
 - Docker Compose persists model data through `./data:/usr/src/app/data`.
 - Docker Compose defaults image tags to `dev` when `VERSION` is unset and still accepts a local `.env` override.
@@ -174,13 +210,13 @@ The Flask app is created by `src.main:create_app()` and registers these surfaces
 
 The test suite currently covers:
 
-- Health endpoint response.
-- Metrics endpoint content and metric names.
-- Successful model upload with a ZIP containing `.keras`.
-- Upload validation for missing data.
-- Successful prediction with mocked TensorFlow loading.
-- Prediction validation for missing, empty, malformed, and unknown-model requests.
+- Deterministic demo-model archive creation and real Keras loading.
+- Health and metrics endpoint responses, including exact Prometheus metric names.
+- Model upload success plus hash, payload-size, expanded-size, ZIP-entry, traversal, upload-workspace collision, and missing-model validation.
+- Atomic replacement, cache invalidation, interrupted-upload recovery, and restart directory filtering.
+- Prediction success plus missing, empty, malformed, non-array, and unknown-model requests.
 - Model lookup success, missing hash, and unknown model behavior.
+- LRU eviction, stale-model deletion, cleanup scheduling, and prediction/upload cleanup coordination.
 
 Run tests from the repository root with:
 
@@ -193,5 +229,5 @@ uv run python -m pytest
 - The service has no built-in authentication or authorization.
 - Metadata is in memory and rebuilt from model directories at startup.
 - ZIP extraction should be reviewed before accepting untrusted uploads.
-- Uploaded file payload size is enforced with Flask `MAX_CONTENT_LENGTH` and checked again at the application level with `MAX_MODEL_FILE_SIZE`.
+- Uploaded file payload size is enforced by checking the uploaded `model_file` stream against `MAX_MODEL_FILE_SIZE`.
 - Multiple Gunicorn workers would each have independent model metadata and cache state.

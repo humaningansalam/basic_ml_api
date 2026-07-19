@@ -1,13 +1,20 @@
 import pytest
 from prometheus_client import REGISTRY
 
+from src.common.errors import ErrorCode
+from src.config import Config
 from src.main import create_app
 
 @pytest.fixture
-def app():
+def app(tmp_path):
     """테스트용 Flask 애플리케이션을 반환하는 fixture"""
-    app = create_app()
-    app.testing = True # 테스트 모드 설정
+    class TestConfig(Config):
+        TESTING = True
+        START_BACKGROUND_MONITORING = False
+        MODEL_STORE_PATH = str(tmp_path / 'models')
+        MODEL_CLEANUP_INTERVAL = 0
+
+    app = create_app(TestConfig)
     return app
 
 @pytest.fixture
@@ -26,3 +33,15 @@ def get_metric_value():
                         return sample.value
         return None
     return _get_metric_value
+
+
+@pytest.fixture
+def assert_error_response():
+    def _assert_error_response(response, status_code, error_code: ErrorCode, details=None):
+        assert response.status_code == status_code
+        assert response.content_type == 'application/json'
+        assert response.json['error']['code'] == error_code.value
+        assert isinstance(response.json['error']['message'], str)
+        assert response.json['error']['details'] == (details or {})
+
+    return _assert_error_response
