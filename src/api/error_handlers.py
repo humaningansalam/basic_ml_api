@@ -79,9 +79,11 @@ def _copy_http_headers(response, error: HTTPException) -> None:
 
 
 def register_error_handlers(app: Flask) -> None:
+    metrics = get_metrics()
+
     @app.errorhandler(ApplicationError)
     def handle_application_error(error: ApplicationError):
-        get_metrics().increment_error_count(error.code)
+        metrics.increment_error_count(error.code)
         spec = ERROR_SPECS[error.code]
         if spec.status is not None and spec.status >= HTTPStatus.INTERNAL_SERVER_ERROR:
             app.logger.error(
@@ -116,7 +118,7 @@ def register_error_handlers(app: Flask) -> None:
             )
             status_override = HTTPStatus.REQUEST_ENTITY_TOO_LARGE.value
 
-        get_metrics().increment_error_count(application_error.code)
+        metrics.increment_error_count(application_error.code)
         response, response_status = _error_response(
             application_error,
             status_override=status_override,
@@ -130,7 +132,7 @@ def register_error_handlers(app: Flask) -> None:
         error_code = HTTP_ERROR_CODES.get(status, ErrorCode.HTTP_ERROR)
         details = {} if error_code is not ErrorCode.HTTP_ERROR else {'status': status}
         application_error = ApplicationError(error_code, details)
-        get_metrics().increment_error_count(application_error.code)
+        metrics.increment_error_count(application_error.code)
         status_override = status if error_code is ErrorCode.HTTP_ERROR else None
         response, response_status = _error_response(
             application_error,
@@ -142,7 +144,7 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):
         internal_error = ApplicationError(ErrorCode.INTERNAL_ERROR)
-        get_metrics().increment_error_count(internal_error.code)
+        metrics.increment_error_count(internal_error.code)
         app.logger.error(
             'Unhandled application error',
             exc_info=(type(error), error, error.__traceback__),
