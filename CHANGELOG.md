@@ -2,6 +2,13 @@
 
 All notable changes to Basic ML API are documented in this file.
 
+## [0.3.1] - 2026-08-15
+
+### Changed
+
+- Simplified model loading, cache, cleanup, request parsing, and error-metric internals without changing the public API.
+- Added a Docker healthcheck backed by the existing `/health` endpoint.
+
 ## [0.3.0] - 2026-07-19
 
 ### Added
