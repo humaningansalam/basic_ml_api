@@ -15,12 +15,10 @@ _setup_done = False
 _REQUEST_OVERHEAD_BYTES = 1024 * 1024
 
 
-def _should_start_monitoring(config_class) -> bool:
-    return getattr(config_class, 'START_BACKGROUND_MONITORING', True)
-
-
 def create_app(config_class=Config):
     """Flask 애플리케이션 팩토리 함수"""
+    global _setup_done
+
     app = Flask(__name__)
     app.config.from_object(config_class)
     app.config['MAX_CONTENT_LENGTH'] = (
@@ -33,7 +31,7 @@ def create_app(config_class=Config):
         max_model_file_size=app.config['MAX_MODEL_FILE_SIZE'],
     )
 
-    if _should_start_monitoring(config_class) and not _setup_done:
+    if getattr(config_class, 'START_BACKGROUND_MONITORING', True) and not _setup_done:
         setup_logging(
             level=app.config["LOG_LEVEL"],
             loki_url=app.config.get("LOKI_URL"),
@@ -44,7 +42,7 @@ def create_app(config_class=Config):
         monitor = ResourceMonitor(metrics_obj=metrics, interval=5)
         monitor.start()
 
-        globals()['_setup_done'] = True
+        _setup_done = True
 
     app.register_blueprint(health_bp)
     app.register_blueprint(metrics_bp)

@@ -11,8 +11,11 @@ from src.core.model_types import ModelMetadata
 
 def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
     manager = ModelManager(str(tmp_path), cleanup_interval_hours=0)
+    model_dir = tmp_path / 'testhash123'
+    model_dir.mkdir()
+    (model_dir / 'model.keras').write_bytes(b'model')
     manager.metadata_store['testhash123'] = ModelMetadata(
-        file_path=str(tmp_path / 'testhash123'),
+        file_path=str(model_dir),
         used=datetime(2024, 4, 27, 12, 0),
     )
     manager.model_cache = OrderedDict()
@@ -28,8 +31,7 @@ def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
         model.predict.return_value = np.array([[0.9, 0.1]])
         return model
 
-    with patch('src.core.model_manager.os.walk', return_value=[(str(tmp_path), [], ['model.keras'])]), \
-         patch('src.core.model_manager.tf.keras.models.load_model', side_effect=fake_load_model):
+    with patch('src.core.model_manager.tf.keras.models.load_model', side_effect=fake_load_model):
         prediction = {}
 
         def run_predict():
@@ -48,7 +50,7 @@ def test_predict_releases_lock_while_model_load_is_blocked(tmp_path):
         reader.join(timeout=5)
 
         assert 'value' in info_result
-        assert info_result['value'].file_path == str(tmp_path / 'testhash123')
+        assert info_result['value'].file_path == str(model_dir)
 
         release_load.set()
         thread.join(timeout=5)
@@ -98,8 +100,7 @@ def test_predict_blocks_stale_cleanup_until_used_timestamp_refreshes(tmp_path):
         cleanup_result['value'] = manager.clean_old_models()
         cleanup_finished.set()
 
-    with patch('src.core.model_manager.os.walk', return_value=[(str(model_dir), [], ['model.keras'])]), \
-         patch('src.core.model_manager.tf.keras.models.load_model', side_effect=fake_load_model), \
+    with patch('src.core.model_manager.tf.keras.models.load_model', side_effect=fake_load_model), \
          patch('src.core.model_manager.utils.one_week_ago', return_value=stale_cutoff), \
          patch('src.core.model_manager.utils.get_kr_time', return_value=fresh_used), \
          patch.object(manager, '_get_model_dir_lock', side_effect=tracked_get_model_dir_lock):

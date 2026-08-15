@@ -100,7 +100,6 @@ def test_upload_model_success(mock_zipfile, mock_save, client):
     mock_zip_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
     mock_zip_instance.infolist.return_value = [create_zip_info('model.keras')]
-    mock_zip_instance.testzip.return_value = None
 
     test_zip = create_test_model_zip()
 
@@ -177,7 +176,6 @@ def test_upload_model_encrypted_zip_is_client_error(mock_zipfile, mock_save, cli
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
     mock_zip.infolist.return_value = [create_zip_info('model.keras')]
-    mock_zip.testzip.return_value = None
     mock_zip.extractall.side_effect = RuntimeError('password required for extraction')
     mock_zipfile.return_value = mock_zip
 
@@ -201,7 +199,6 @@ def test_upload_model_extraction_storage_failure_remains_server_error(
     mock_zip = MagicMock()
     mock_zip.__enter__.return_value = mock_zip
     mock_zip.infolist.return_value = [create_zip_info('model.keras')]
-    mock_zip.testzip.return_value = None
     mock_zip.extractall.side_effect = OSError('disk failure')
     mock_zipfile.return_value = mock_zip
 

@@ -10,7 +10,7 @@ import weakref
 from collections import OrderedDict
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Optional
-from zipfile import BadZipFile, ZipFile, ZipInfo
+from zipfile import BadZipFile, ZIP_BZIP2, ZipFile, ZipInfo
 from zlib import error as ZlibError
 
 import numpy as np
@@ -58,7 +58,7 @@ class ModelManager:
                 continue
             if not os.path.isdir(model_folder_path):
                 continue
-            if not self._contains_keras_file(model_folder_path):
+            if self._find_keras_file(model_folder_path) is None:
                 self.logger.warning('Ignoring model directory without a .keras file: %s', model_folder_path)
                 continue
 
@@ -67,13 +67,13 @@ class ModelManager:
                 used=utils.get_kr_time(),
             )
 
-    def _contains_keras_file(self, model_folder_path: str) -> bool:
+    def _find_keras_file(self, model_folder_path: str) -> Optional[str]:
         for root, _, files in os.walk(model_folder_path):
             for file_name in files:
                 file_path = os.path.join(root, file_name)
                 if file_name.endswith('.keras') and os.path.isfile(file_path):
-                    return True
-        return False
+                    return file_path
+        return None
 
     def _backup_path(self, model_hash: str) -> str:
         return os.path.join(self.store_path, f'{self._BACKUP_PREFIX}{model_hash}')
@@ -152,7 +152,7 @@ class ModelManager:
                     os.replace(backup_path, model_folder_path)
                 except OSError as rollback_error:
                     for recovery_path in (backup_path, model_folder_path):
-                        if self._contains_keras_file(recovery_path):
+                        if self._find_keras_file(recovery_path) is not None:
                             self._update_existing_metadata_path(model_hash, recovery_path)
                             break
                     raise OSError(
@@ -232,7 +232,7 @@ class ModelManager:
             raise ApplicationError(ErrorCode.MODEL_ARTIFACT_REQUIRED)
 
     def _validate_archive_contents(self, zip_ref: ZipFile) -> None:
-        # Decompress before writing so corrupt input stays distinct from storage failures.
+        # BZIP2 corruption can surface as OSError, which is otherwise a storage failure.
         try:
             corrupt_member = zip_ref.testzip()
         except (BadZipFile, EOFError, LZMAError, OSError, RuntimeError, ZlibError) as error:
@@ -288,7 +288,7 @@ class ModelManager:
                     current_metadata = self.metadata_store.get(model_hash)
                     if current_metadata is None:
                         continue
-                    if current_metadata.used >= utils.one_week_ago():
+                    if current_metadata.used >= cutoff:
                         continue
                     if current_metadata.file_path != model_path:
                         continue
@@ -306,14 +306,6 @@ class ModelManager:
                     ) from error
 
                 with self._state_lock:
-                    current_metadata = self.metadata_store.get(model_hash)
-                    if current_metadata is None:
-                        continue
-                    if current_metadata.used >= utils.one_week_ago():
-                        continue
-                    if current_metadata.file_path != model_path:
-                        continue
-
                     self.metadata_store.pop(model_hash, None)
                     if model_hash in self.model_cache:
                         del self.model_cache[model_hash]
@@ -327,26 +319,20 @@ class ModelManager:
     def load_model_to_cache(self, model_hash: str) -> Any:
         with self._get_model_dir_lock(model_hash):
             with self._state_lock:
-                if model_hash in self.model_cache:
+                cached_model = self.model_cache.get(model_hash)
+                if cached_model is not None:
                     self.model_cache.move_to_end(model_hash)
                     self.metrics.increment_cache_hit()
-                    return self.model_cache[model_hash]
+                    return cached_model
 
-                if model_hash not in self.metadata_store:
+                metadata = self.metadata_store.get(model_hash)
+                if metadata is None:
                     raise ApplicationError(ErrorCode.MODEL_NOT_FOUND, {'model_hash': model_hash})
 
-                model_folder_path = self.metadata_store[model_hash].file_path
+                model_folder_path = metadata.file_path
 
-            keras_file_path = None
-            for root, _, files in os.walk(model_folder_path):
-                for file in files:
-                    if file.endswith('.keras'):
-                        keras_file_path = os.path.join(root, file)
-                        break
-                if keras_file_path:
-                    break
-
-            if not keras_file_path:
+            keras_file_path = self._find_keras_file(model_folder_path)
+            if keras_file_path is None:
                 raise ApplicationError(
                     ErrorCode.MODEL_ARTIFACT_UNAVAILABLE,
                     {'model_hash': model_hash},
@@ -420,7 +406,8 @@ class ModelManager:
                             with ZipFile(temp_zip_path, 'r') as zip_ref:
                                 members = zip_ref.infolist()
                                 self._validate_archive_members(members, staging_dir)
-                                self._validate_archive_contents(zip_ref)
+                                if any(member.compress_type == ZIP_BZIP2 for member in members):
+                                    self._validate_archive_contents(zip_ref)
                                 zip_ref.extractall(staging_dir)
                         except (BadZipFile, EOFError, LZMAError, RuntimeError, UnicodeError, ZlibError) as error:
                             raise ApplicationError(ErrorCode.INVALID_ZIP) from error
@@ -436,8 +423,7 @@ class ModelManager:
                     )
 
                     with self._state_lock:
-                        if model_hash in self.model_cache:
-                            del self.model_cache[model_hash]
+                        if self.model_cache.pop(model_hash, None) is not None:
                             self.metrics.set_model_cache_usage(len(self.model_cache))
 
                         self.metadata_store[model_hash] = ModelMetadata(
@@ -456,9 +442,9 @@ class ModelManager:
 
     def get_model_info(self, model_hash: str) -> ModelInfo:
         with self._state_lock:
-            if model_hash not in self.metadata_store:
+            metadata = self.metadata_store.get(model_hash)
+            if metadata is None:
                 raise ApplicationError(ErrorCode.MODEL_NOT_FOUND, {'model_hash': model_hash})
-            metadata = self.metadata_store[model_hash]
             return ModelInfo(
                 model_hash=model_hash,
                 file_path=metadata.file_path,

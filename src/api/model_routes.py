@@ -35,12 +35,13 @@ def _require_model_hash() -> str:
 def _parse_prediction_data() -> np.ndarray:
     if not request.is_json:
         raise ApplicationError(ErrorCode.PREDICTION_DATA_REQUIRED)
-    if not request.get_data(cache=True):
+    payload = request.get_data(cache=True)
+    if not payload:
         raise ApplicationError(ErrorCode.PREDICTION_DATA_REQUIRED)
 
     try:
         data = json.loads(
-            request.get_data(cache=True),
+            payload,
             parse_constant=_reject_non_standard_json_number,
         )
     except RecursionError as error:

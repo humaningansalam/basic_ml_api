@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from datetime import datetime, timezone
 import gc
+from pathlib import Path
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -11,19 +12,24 @@ from src.common.errors import ErrorCode
 from src.core.model_types import ModelMetadata
 
 
-@patch('src.core.model_manager.os.walk')
+def _register_model_file(manager, model_hash='testhash123'):
+    model_dir = Path(manager.store_path) / model_hash
+    model_dir.mkdir()
+    (model_dir / 'model.keras').write_bytes(b'model')
+    manager.metadata_store[model_hash] = ModelMetadata(
+        file_path=str(model_dir),
+        used=datetime(2024, 4, 27, 12, 0, tzinfo=timezone.utc),
+    )
+
+
 @patch('tensorflow.keras.models.load_model')
-def test_predict_success(mock_load_model, mock_walk, client, get_metric_value):
-    mock_walk.return_value = [('/fake/path', [], ['model.keras'])]
+def test_predict_success(mock_load_model, client, get_metric_value):
     mock_model = MagicMock()
     mock_model.predict.return_value = np.array([[0.8, 0.2]])
     mock_load_model.return_value = mock_model
 
     manager = client.application.model_manager
-    manager.metadata_store['testhash123'] = ModelMetadata(
-        file_path='../data/model_/testhash123',
-        used=datetime(2024, 4, 27, 12, 0, tzinfo=timezone.utc),
-    )
+    _register_model_file(manager)
     manager.model_cache = OrderedDict()
 
     response = client.post('/predict?hash=testhash123', json=[[0.5, 0.5]])
@@ -57,23 +63,17 @@ def test_predict_success(mock_load_model, mock_walk, client, get_metric_value):
         ),
     ],
 )
-@patch('src.core.model_manager.os.walk')
 @patch('tensorflow.keras.models.load_model')
 def test_predict_serializes_nested_model_outputs(
     mock_load_model,
-    mock_walk,
     client,
     model_output,
     expected_prediction,
 ):
-    mock_walk.return_value = [('/fake/path', [], ['model.keras'])]
     mock_model = MagicMock()
     mock_model.predict.return_value = model_output
     mock_load_model.return_value = mock_model
-    client.application.model_manager.metadata_store['testhash123'] = ModelMetadata(
-        file_path='../data/model_/testhash123',
-        used=datetime(2024, 4, 27, 12, 0, tzinfo=timezone.utc),
-    )
+    _register_model_file(client.application.model_manager)
 
     response = client.post('/predict?hash=testhash123', json=[[4.0]])
 
