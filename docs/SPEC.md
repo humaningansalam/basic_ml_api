@@ -201,6 +201,7 @@ Other framework-level HTTP rejections preserve their HTTP status, use code `http
 ## Deployment Notes
 
 - The Docker image runs Gunicorn with one worker and disables the unused control socket: `gunicorn --no-control-socket -w 1 -b 0.0.0.0:5000 src.main:create_app()`.
+- The Docker image reports container health by probing `GET /health` on the local Gunicorn listener; startup receives a 30-second grace period before health failures count.
 - Docker Compose maps host port `12021` to container port `5000`.
 - Docker Compose persists model data through `./data:/usr/src/app/data`.
 - Docker Compose defaults image tags to `dev` when `VERSION` is unset and still accepts a local `.env` override.
