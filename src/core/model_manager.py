@@ -241,6 +241,20 @@ class ModelManager:
         if corrupt_member is not None:
             raise ApplicationError(ErrorCode.INVALID_ZIP)
 
+    def _validate_model_artifact(self, staging_dir: str, model_hash: str) -> None:
+        keras_file_path = self._find_keras_file(staging_dir)
+        if keras_file_path is None:
+            raise ApplicationError(ErrorCode.MODEL_ARTIFACT_REQUIRED)
+
+        # Use the same loader as prediction before replacing a working model.
+        try:
+            tf.keras.models.load_model(keras_file_path)
+        except (ValueError, TypeError, KeyError, OSError, EOFError, BadZipFile) as error:
+            raise ApplicationError(
+                ErrorCode.INVALID_MODEL_ARTIFACT,
+                {'model_hash': model_hash},
+            ) from error
+
     def start_cleanup_scheduler(self) -> None:
         with self._cleanup_thread_lock:
             if self._cleanup_thread_started:
@@ -415,6 +429,7 @@ class ModelManager:
                         if os.path.exists(temp_zip_path):
                             os.remove(temp_zip_path)
 
+                    self._validate_model_artifact(staging_dir, model_hash)
                     used_at = utils.get_kr_time()
                     replaced = self._replace_model_directory(
                         staging_dir,
