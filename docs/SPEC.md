@@ -75,6 +75,7 @@ Other framework-level HTTP rejections preserve their HTTP status, use code `http
 - Unsafe ZIP path: `400`, code `unsafe_zip_entry`
 - Expanded archive exceeds `MAX_MODEL_FILE_SIZE`: `400`, code `uncompressed_size_exceeded`
 - Missing `.keras`: `400`, code `model_artifact_required`
+- Unloadable `.keras` artifact: `400`, code `invalid_model_artifact`; the existing model is preserved
 - Storage failure: `500`, code `model_storage_failed`; internal exception text is not exposed
 
 ### Storage Behavior
@@ -82,6 +83,7 @@ Other framework-level HTTP rejections preserve their HTTP status, use code `http
 - The service creates a directory under `MODEL_STORE_PATH` named by the supplied hash.
 - The uploaded ZIP is kept outside the extraction directory inside a temporary upload workspace, so archive member names cannot overwrite the service's own upload file.
 - ZIP contents are first validated and extracted into a dedicated staging subdirectory.
+- The selected `.keras` artifact is loaded with the prediction loader while still staged. Invalid artifacts are rejected before changing the model directory, metadata, or cache.
 - The target hash directory is replaced through a same-filesystem backup-and-rename transaction so stale files are removed without discarding the last working model first.
 - If installing the staged directory fails, the previous directory is restored and its metadata and cache entry remain usable.
 - If the process stops during replacement, startup restores an unfinished backup or removes a leftover backup after a completed install.
@@ -215,6 +217,7 @@ The test suite currently covers:
 - Health and metrics endpoint responses, including exact Prometheus metric names.
 - Model upload success plus hash, payload-size, expanded-size, ZIP-entry, traversal, upload-workspace collision, and missing-model validation.
 - Atomic replacement, cache invalidation, interrupted-upload recovery, and restart directory filtering.
+- Real Keras uploads, invalid-artifact rejection, and preservation of cached and uncached models after an invalid replacement.
 - Prediction success plus missing, empty, malformed, non-array, and unknown-model requests.
 - Model lookup success, missing hash, and unknown model behavior.
 - LRU eviction, stale-model deletion, cleanup scheduling, and prediction/upload cleanup coordination.
