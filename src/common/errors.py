@@ -14,6 +14,7 @@ class ErrorCode(StrEnum):
     UNSAFE_ZIP_ENTRY = 'unsafe_zip_entry'
     UNCOMPRESSED_SIZE_EXCEEDED = 'uncompressed_size_exceeded'
     MODEL_ARTIFACT_REQUIRED = 'model_artifact_required'
+    INVALID_MODEL_ARTIFACT = 'invalid_model_artifact'
     MODEL_NOT_FOUND = 'model_not_found'
     MODEL_STORAGE_FAILED = 'model_storage_failed'
     MODEL_ARTIFACT_UNAVAILABLE = 'model_artifact_unavailable'
