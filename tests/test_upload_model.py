@@ -14,6 +14,14 @@ from src.core.model_manager import ModelManager
 from src.core.model_types import ModelMetadata
 from src.main import create_app
 
+
+@pytest.fixture(autouse=True)
+def stub_artifact_validation(monkeypatch):
+    # These tests exercise ZIP/storage transactions using dummy model bytes.
+    # Real Keras validation and replacement are covered in test_upload_model_validation.py.
+    monkeypatch.setattr(ModelManager, '_validate_model_artifact', lambda *args: None)
+
+
 def create_test_model_zip():
     """테스트용 모델 ZIP 파일 생성 (keras 파일 포함)"""
     memory_file = io.BytesIO()
