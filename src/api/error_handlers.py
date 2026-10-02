@@ -41,6 +41,7 @@ ERROR_SPECS: Dict[ErrorCode, ErrorSpec] = {
     ErrorCode.UNSAFE_ZIP_ENTRY: ErrorSpec(HTTPStatus.BAD_REQUEST, 'The model archive contains an unsafe path.'),
     ErrorCode.UNCOMPRESSED_SIZE_EXCEEDED: ErrorSpec(HTTPStatus.BAD_REQUEST, 'The expanded model archive exceeds the size limit.'),
     ErrorCode.MODEL_ARTIFACT_REQUIRED: ErrorSpec(HTTPStatus.BAD_REQUEST, 'The model archive must contain a .keras file.'),
+    ErrorCode.INVALID_MODEL_ARTIFACT: ErrorSpec(HTTPStatus.BAD_REQUEST, 'The model artifact could not be loaded.'),
     ErrorCode.MODEL_NOT_FOUND: ErrorSpec(HTTPStatus.NOT_FOUND, 'The requested model was not found.'),
     ErrorCode.MODEL_STORAGE_FAILED: ErrorSpec(HTTPStatus.INTERNAL_SERVER_ERROR, 'The model could not be stored.'),
     ErrorCode.MODEL_ARTIFACT_UNAVAILABLE: ErrorSpec(HTTPStatus.INTERNAL_SERVER_ERROR, 'The stored model artifact is unavailable.'),
