@@ -1,27 +1,57 @@
-#config
 import os
+from typing import ClassVar
+
+
+def _read_int_setting(
+    name: str,
+    default: int,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(f"{name} must be an integer") from error
+
+    if minimum is not None and value < minimum:
+        raise RuntimeError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise RuntimeError(f"{name} must be at most {maximum}")
+    return value
+
 
 class Config:
-    """애플리케이션 설정 관리 클래스"""
-    # 모델 저장 경로
-    MODEL_STORE_PATH = os.getenv('MODEL_STORE_PATH', 'data/model_')
-    
-    # 로깅 설정
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    """Default Flask configuration loaded from environment variables."""
 
-    # 로키 설정
-    LOKI_URL = os.getenv('LOKI_URL')
-    LOKI_TAGS = {
-        "app": os.getenv('APP_NAME', 'ml-api'),
-        "env": os.getenv('APP_ENV', 'dev')
+    MODEL_STORE_PATH = os.getenv("MODEL_STORE_PATH", "data/model_")
+    MAX_MODEL_FILE_SIZE = _read_int_setting(
+        "MAX_MODEL_FILE_SIZE",
+        100 * 1024 * 1024,
+        minimum=1,
+    )
+    MAX_CACHED_MODELS = _read_int_setting(
+        "MAX_CACHED_MODELS",
+        10,
+        minimum=1,
+    )
+    MODEL_CLEANUP_INTERVAL_HOURS = _read_int_setting(
+        "MODEL_CLEANUP_INTERVAL",
+        5,
+        minimum=0,
+    )
+
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOKI_URL = os.getenv("LOKI_URL")
+    LOKI_TAGS: ClassVar[dict[str, str]] = {
+        "app": os.getenv("APP_NAME", "ml-api"),
+        "env": os.getenv("APP_ENV", "dev"),
     }
-    
-    # 모델 정리 주기 (시간)
-    MODEL_CLEANUP_INTERVAL = int(os.getenv('MODEL_CLEANUP_INTERVAL', 5))
-    
-    # 서버 설정
-    HOST = os.getenv('SERVER_HOST', '0.0.0.0')
-    PORT = int(os.getenv('SERVER_PORT', 5000))
-    
-    # 기타 ML API 관련 설정
-    MAX_MODEL_FILE_SIZE = int(os.getenv('MAX_MODEL_FILE_SIZE', 100 * 1024 * 1024))  # 100MB
+    START_BACKGROUND_MONITORING = True
+
+    HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+    PORT = _read_int_setting("SERVER_PORT", 5000, minimum=1, maximum=65535)

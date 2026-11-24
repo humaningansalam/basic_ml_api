@@ -2,6 +2,41 @@
 
 All notable changes to Basic ML API are documented in this file.
 
+## [0.3.2] - 2026-11-24
+
+### Added
+
+- Added a dedicated model-archive boundary for ZIP validation and extraction.
+- Added repository architecture, contribution, security, agent, and pull-request guidance.
+- Added regression coverage for configuration limits, safe Keras loading, symbolic-link entries, and non-portable archive paths.
+
+### Changed
+
+- Renamed model lifecycle fields and functions to describe cache, metadata, timestamps, locks, and replacement behavior directly.
+- Standardized internal time handling on timezone-aware UTC.
+- Made cache size configurable and validated all integer settings at startup.
+- Loaded prediction-only Keras models with `compile=False` and `safe_mode=True`.
+- Registered application services through Flask extensions instead of ad-hoc application attributes.
+- Split documentation ownership between usage, external contracts, and internal architecture.
+- Replaced broad generated ignore rules and duplicated automation with project-specific configuration.
+- Pinned the Git-based monitoring dependency to a commit and removed unused direct dependencies.
+- Switched the CPU-only container runtime from the general TensorFlow distribution to `tensorflow-cpu`.
+- Kept the existing Compose service name and host model directory; the deployment prepares ownership for the non-root runtime without moving model data.
+
+### Fixed
+
+- Rejects unloadable Keras artifacts before replacing an existing model, preserving its files, metadata, and cache.
+- Uses an existing setup-uv action tag so the release workflow can run.
+
+### Security
+
+- Rejects ZIP symbolic links and backslash-based archive paths in addition to traversal, absolute paths, conflicting entries, and size limits.
+- Documents that authentication and model sandboxing are outside the service boundary.
+
+### Removed
+
+- Removed the `pytz`-based local-time helper, duplicated pytest configuration, and generic generated repository boilerplate.
+
 ## [0.3.1] - 2026-08-15
 
 ### Changed

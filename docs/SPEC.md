@@ -1,22 +1,16 @@
 # Basic ML API Specification
 
-This specification describes the current API and runtime behavior implemented by the Basic ML API service.
+이 문서는 외부 클라이언트와 운영자가 의존할 수 있는 현재 계약을 정의합니다.
 
-## Service Overview
+## 공통 응답
 
-Basic ML API is a Python 3.11 Flask application that stores uploaded TensorFlow/Keras models, loads models on demand, caches loaded models in memory, and returns prediction results as JSON.
+성공하는 JSON API는 최상위 `data`를 사용합니다.
 
-The Flask app is created by `src.main:create_app()` and registers these surfaces:
+```json
+{"data": {}}
+```
 
-- `POST /upload_model`
-- `GET /get_model`
-- `POST /predict`
-- `GET /health`
-- `GET /metrics`
-
-## Response Contracts
-
-Successful JSON endpoints return a `data` object. Errors use one schema and a stable enum-backed code:
+오류는 다음 envelope를 사용합니다.
 
 ```json
 {
@@ -28,207 +22,193 @@ Successful JSON endpoints return a `data` object. Errors use one schema and a st
 }
 ```
 
-Clients must branch on `error.code`, not on the human-readable `message`. Error metrics use the same code as the `type` label.
-Unknown routes return `404` with code `route_not_found`; unsupported methods return `405` with code `method_not_allowed`.
-Other framework-level HTTP rejections preserve their HTTP status, use code `http_error`, and include the status in `error.details.status`.
+클라이언트는 변경 가능한 `message`가 아니라 `code`로 분기해야 합니다. `details`는 항상 객체입니다.
 
-## Runtime Configuration
+## 모델 해시
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `MODEL_STORE_PATH` | Directory for uploaded and extracted model files | `data/model_` |
-| `LOG_LEVEL` | Application log level | `INFO` |
-| `LOKI_URL` | Optional Loki logging endpoint | unset |
-| `APP_NAME` | Logging/monitoring app tag | `ml-api` |
-| `APP_ENV` | Logging/monitoring environment tag | `dev` |
-| `MODEL_CLEANUP_INTERVAL` | Cleanup interval in hours | `5` |
-| `SERVER_HOST` | Flask host binding | `0.0.0.0` |
-| `SERVER_PORT` | Flask port | `5000` |
-| `MAX_MODEL_FILE_SIZE` | Maximum uploaded model file size | `104857600` |
+`hash` 쿼리 값은 다음 정규식을 만족해야 합니다.
 
-## Model Upload
+```text
+^[A-Za-z0-9._-]{8,128}$
+```
 
-### Endpoint
+해시는 저장 디렉터리 이름과 동시성 단위로 사용됩니다.
 
-`POST /upload_model?hash={model_hash}`
+## 엔드포인트
 
-### Request
+### `POST /upload_model?hash={model_hash}`
 
-- Content type: `multipart/form-data`
-- Multipart field: `model_file`
-- Query parameter: `hash` (`8` to `128` ASCII letters, digits, `.`, `_`, or `-`)
-- Uploaded file format: ZIP archive containing at least one `.keras` file
+요청:
 
-### Success Response
+- Content-Type: `multipart/form-data`
+- 파일 필드: `model_file`
+- 형식: 최소 한 개의 일반 `.keras` 파일을 포함한 ZIP
 
-- Status: `200`
-- Body: `{"data": {"model_hash": "...", "replaced": false}}`
+성공 `200`:
 
-### Error Behavior
+```json
+{
+  "data": {
+    "model_hash": "demo-model-v1",
+    "replaced": false
+  }
+}
+```
 
-- Missing `model_file`: `400`, code `model_file_required`
-- Missing `hash`: `400`, code `model_hash_required`
-- Invalid hash: `400`, code `invalid_model_hash`
-- Uploaded payload exceeds `MAX_MODEL_FILE_SIZE`: `413`, code `upload_too_large`
-- Invalid ZIP: `400`, code `invalid_zip`
-- Too many ZIP entries: `400`, code `zip_entry_limit_exceeded`
-- Unsafe ZIP path: `400`, code `unsafe_zip_entry`
-- Expanded archive exceeds `MAX_MODEL_FILE_SIZE`: `400`, code `uncompressed_size_exceeded`
-- Missing `.keras`: `400`, code `model_artifact_required`
-- Storage failure: `500`, code `model_storage_failed`; internal exception text is not exposed
+`replaced`는 같은 해시의 기존 모델 디렉터리가 실제로 교체됐는지를 나타냅니다.
 
-### Storage Behavior
+검증 규칙:
 
-- The service creates a directory under `MODEL_STORE_PATH` named by the supplied hash.
-- The uploaded ZIP is kept outside the extraction directory inside a temporary upload workspace, so archive member names cannot overwrite the service's own upload file.
-- ZIP contents are first validated and extracted into a dedicated staging subdirectory.
-- The target hash directory is replaced through a same-filesystem backup-and-rename transaction so stale files are removed without discarding the last working model first.
-- If installing the staged directory fails, the previous directory is restored and its metadata and cache entry remain usable.
-- If the process stops during replacement, startup restores an unfinished backup or removes a leftover backup after a completed install.
-- The temporary uploaded ZIP is removed after the extraction attempt.
-- Flask bounds the total request body to `MAX_MODEL_FILE_SIZE` plus 1 MiB of multipart overhead, while the upload endpoint separately enforces the exact `model_file` stream limit.
-- If `hash` already exists, the old in-memory cached model is invalidated so the next `/predict` for that hash loads from disk again.
-- If a hash is uploaded again, the existing directory contents are replaced and only the new upload is retained.
-- Model metadata is stored in memory with `file_path` and `used` timestamp.
-- Uploads larger than `MAX_MODEL_FILE_SIZE` are rejected with `413` and code `upload_too_large`.
-- On startup, abandoned internal `@upload-...` workspaces are removed so interrupted uploads do not accumulate on the persistent volume; only valid hash directories containing a regular `.keras` file are registered, and other incomplete directories are ignored.
+- 업로드 파일은 `MAX_MODEL_FILE_SIZE`를 넘을 수 없습니다.
+- ZIP 엔트리는 최대 5,000개입니다.
+- 압축 해제 크기의 합은 `MAX_MODEL_FILE_SIZE`를 넘을 수 없습니다.
+- 절대 경로, `..`, 역슬래시 경로, 심볼릭 링크, 파일/디렉터리 충돌을 거부합니다.
+- 검증과 추출은 최종 모델 디렉터리 밖의 격리된 작업공간에서 수행합니다.
+- 추출한 Keras 모델은 예측과 동일한 로더로 검증한 후에만 설치합니다.
+- 기존 모델은 백업 후 원자적으로 교체하며 설치 실패 시 복구합니다.
 
-## Model Lookup
+주요 오류:
 
-### Endpoint
+| Status | Code | 조건 |
+|---:|---|---|
+| 400 | `model_file_required` | 파일 필드가 없거나 파일명이 비어 있음 |
+| 400 | `model_hash_required` | 해시 누락 |
+| 400 | `invalid_model_hash` | 허용하지 않는 해시 형식 |
+| 413 | `upload_too_large` | 업로드 파일 한도 초과 |
+| 400 | `invalid_zip` | ZIP 형식, 압축 데이터 또는 엔트리 구조가 잘못됨 |
+| 400 | `zip_entry_limit_exceeded` | 엔트리 수 초과 |
+| 400 | `unsafe_zip_entry` | 안전하지 않은 경로 또는 링크 |
+| 400 | `uncompressed_size_exceeded` | 압축 해제 크기 한도 초과 |
+| 400 | `model_artifact_required` | `.keras` 파일 없음 |
+| 400 | `invalid_model_artifact` | Keras 모델을 로드할 수 없음; 기존 모델 유지 |
+| 500 | `model_storage_failed` | 파일 저장, 이동, 삭제 실패 |
 
-`GET /get_model?hash={model_hash}`
+### `GET /get_model?hash={model_hash}`
 
-### Success Response
+성공 `200`:
 
-- Status: `200`
-- Body: `{"data": {"model_hash": "...", "file_path": "...", "used": "ISO-8601 timestamp"}}`
+```json
+{
+  "data": {
+    "model_hash": "demo-model-v1",
+    "file_path": "data/model_/demo-model-v1",
+    "used": "2026-11-24T06:00:00+00:00"
+  }
+}
+```
 
-### Error Behavior
+`used`는 timezone-aware ISO 8601 UTC 시각입니다.
 
-- Missing `hash`: `400`, code `model_hash_required`
-- Unknown hash: `404`, code `model_not_found`
-- Unexpected failure: `500`, code `internal_error`; internal exception text is not exposed
+오류:
 
-## Prediction
+| Status | Code | 조건 |
+|---:|---|---|
+| 400 | `model_hash_required` | 해시 누락 |
+| 404 | `model_not_found` | 등록되지 않은 해시 |
 
-### Endpoint
+### `POST /predict?hash={model_hash}`
 
-`POST /predict?hash={model_hash}`
+요청:
 
-### Request
+- Content-Type: `application/json`
+- 본문: 비어 있지 않은 JSON 배열
+- `NaN`, `Infinity`, `-Infinity` 같은 비표준 JSON 숫자는 허용하지 않음
 
-- Content type: `application/json`
-- Query parameter: `hash`
-- Body: JSON array-like prediction input data
+성공 `200`:
 
-### Success Response
+```json
+{
+  "data": {
+    "model_hash": "demo-model-v1",
+    "prediction": [[6.0]]
+  }
+}
+```
 
-- Status: `200`
-- Body: `{"data": {"model_hash": "...", "prediction": [...]}}`
-- Prediction output is converted from NumPy/TensorFlow output to JSON lists.
-- Multi-output list or object structures preserve their nesting, with each NumPy/TensorFlow leaf converted to JSON-compatible values.
+NumPy 배열, TensorFlow tensor, 목록, tuple, 문자열 키를 가진 객체의 중첩 구조를 보존해 JSON 값으로 변환합니다. 비유한 부동소수점 값과 지원하지 않는 출력 타입은 실패합니다.
 
-### Error Behavior
+오류:
 
-- Missing `hash`: `400`, code `model_hash_required`
-- Missing JSON body: `400`, code `prediction_data_required`
-- Malformed JSON: `400`, code `malformed_json`
-- Non-array JSON: `400`, code `prediction_data_not_array`
-- Empty array: `400`, code `prediction_data_empty`
-- Ragged or otherwise invalid array shape: `400`, code `invalid_prediction_data`
-- Unknown model hash: `404`, code `model_not_found`
-- Missing stored artifact: `500`, code `model_artifact_unavailable`
-- Unsupported or non-finite model output: `500`, code `prediction_failed`
-- TensorFlow loading or prediction failure: `500`, code `prediction_failed`
+| Status | Code | 조건 |
+|---:|---|---|
+| 400 | `model_hash_required` | 해시 누락 |
+| 400 | `prediction_data_required` | JSON 본문 누락 |
+| 400 | `malformed_json` | 잘못된 JSON 또는 비표준 숫자 |
+| 400 | `prediction_data_not_array` | 최상위 값이 배열이 아님 |
+| 400 | `prediction_data_empty` | 빈 배열 |
+| 400 | `invalid_prediction_data` | ragged 배열, 과도한 중첩 등 변환 불가 |
+| 404 | `model_not_found` | 등록되지 않은 모델 |
+| 409 | `model_state_conflict` | 로드 중 모델 경로가 교체됨 |
+| 500 | `model_artifact_unavailable` | 등록 경로에 `.keras` 파일이 없음 |
+| 500 | `prediction_failed` | 모델 로드, 실행 또는 결과 변환 실패 |
 
-### Model Loading Behavior
+### `GET /health`
 
-- The service checks the in-memory model cache first.
-- On cache hit, the cached model is reused and moved to the most-recently-used position.
-- On cache miss, the service searches the model directory recursively for a `.keras` file.
-- The first matching `.keras` file is loaded with `tf.keras.models.load_model`.
-- The loaded model is inserted into the cache.
-- The model metadata `used` timestamp is updated after prediction begins successfully.
+성공 `200`:
 
-## Model Cache
+```json
+{"data": {"status": "healthy"}}
+```
 
-- Cache type: in-memory LRU cache backed by `OrderedDict`.
-- Default maximum size: 10 models.
-- When the cache is full, the least-recently-used model is evicted before loading a new model.
-- Cache state is process-local and is not shared across multiple workers.
-- Per-hash coordination locks are retained only while operations use them, so rejected or deleted hashes do not accumulate process state.
+이 엔드포인트는 외부 의존성의 준비 상태가 아니라 현재 프로세스가 요청에 응답하는지만 확인합니다.
 
-## Stale Model Cleanup
+### `GET /metrics`
 
-- A background daemon thread runs cleanup on each `ModelManager` instance.
-- Cleanup removes models whose `used` timestamp is older than one week.
-- Cleanup removes the model directory and any deferred replacement backup before removing metadata and cached model instances, so a later restart cannot restore stale data.
-- Cleanup interval is configurable through `MODEL_CLEANUP_INTERVAL`.
+성공 `200`, Prometheus text exposition 형식입니다.
 
-## Health Endpoint
-
-### Endpoint
-
-`GET /health`
-
-### Success Response
-
-- Status: `200`
-- Body: `{"data": {"status": "healthy"}}`
-
-## Metrics Endpoint
-
-### Endpoint
-
-`GET /metrics`
-
-### Response
-
-- Status: `200`
-- Content type: Prometheus text format
-
-### Expected Metrics
+주요 메트릭:
 
 - `model_cache_usage`
 - `predictions_completed_total`
 - `cache_hits_total`
 - `cache_misses_total`
-- `ml_api_errors_total`
+- `ml_api_errors_total{type="..."}`
 - `ml_api_cpu_usage_percent`
 - `ml_api_ram_usage_mb`
 
-## Deployment Notes
+## 프레임워크 오류
 
-- The Docker image runs Gunicorn with one worker and disables the unused control socket: `gunicorn --no-control-socket -w 1 -b 0.0.0.0:5000 src.main:create_app()`.
-- The Docker image reports container health by probing `GET /health` on the local Gunicorn listener; startup receives a 30-second grace period before health failures count.
-- Docker Compose maps host port `12021` to container port `5000`.
-- Docker Compose persists model data through `./data:/usr/src/app/data`.
-- Docker Compose defaults image tags to `dev` when `VERSION` is unset and still accepts a local `.env` override.
-- Logging and resource monitoring are initialized during app creation.
+| Status | Code | 조건 |
+|---:|---|---|
+| 404 | `route_not_found` | 존재하지 않는 URL |
+| 405 | `method_not_allowed` | 지원하지 않는 HTTP method |
+| 원래 상태 | `http_error` | 기타 Werkzeug HTTP 오류 |
+| 500 | `internal_error` | 분류되지 않은 서버 오류 |
 
-## Current Test Coverage
+내부 예외 메시지와 스택은 응답에 노출하지 않습니다.
 
-The test suite currently covers:
+## 캐시와 정리
 
-- Deterministic demo-model archive creation and real Keras loading.
-- Health and metrics endpoint responses, including exact Prometheus metric names.
-- Model upload success plus hash, payload-size, expanded-size, ZIP-entry, traversal, upload-workspace collision, and missing-model validation.
-- Atomic replacement, cache invalidation, interrupted-upload recovery, and restart directory filtering.
-- Prediction success plus missing, empty, malformed, non-array, and unknown-model requests.
-- Model lookup success, missing hash, and unknown model behavior.
-- LRU eviction, stale-model deletion, cleanup scheduling, and prediction/upload cleanup coordination.
+- 시작 시 저장소 스캔은 심볼릭 링크 모델 디렉터리와 `.keras` 파일을 등록하지 않습니다.
+- 모델 캐시는 프로세스별 `OrderedDict` 기반 LRU입니다.
+- 캐시 히트는 항목을 가장 최근 위치로 이동합니다.
+- 캐시 미스는 결정적인 순서로 발견한 첫 `.keras` 파일을 `compile=False`, `safe_mode=True`로 로드합니다.
+- 모델은 예측 시작 전에 마지막 사용 시각을 갱신합니다.
+- 마지막 사용 시각이 정확히 1주보다 오래된 모델은 정리 대상입니다.
+- 정리는 활성 디렉터리와 교체 백업을 삭제한 뒤 메타데이터와 캐시를 제거합니다.
 
-Run tests from the repository root with:
+## 런타임 설정
 
-```bash
-uv run python -m pytest
-```
+| 환경 변수 | 기본값 | 제약 |
+|---|---:|---|
+| `MODEL_STORE_PATH` | `data/model_` | 쓰기 가능한 경로 |
+| `MAX_MODEL_FILE_SIZE` | `104857600` | 1 이상 정수 |
+| `MAX_CACHED_MODELS` | `10` | 1 이상 정수 |
+| `MODEL_CLEANUP_INTERVAL` | `5` | 0 이상 시간 단위 정수 |
+| `LOG_LEVEL` | `INFO` | Python 로그 레벨 |
+| `LOKI_URL` | 미설정 | 선택 사항 |
+| `APP_NAME` | `ml-api` | 메트릭/로그 태그 |
+| `APP_ENV` | `dev` | 메트릭/로그 태그 |
+| `SERVER_HOST` | `0.0.0.0` | 개발 서버 전용 |
+| `SERVER_PORT` | `5000` | 1~65535 |
 
-## Known Implementation Constraints
+정수 환경 변수가 형식 또는 범위를 위반하면 애플리케이션 시작이 실패합니다.
 
-- The service has no built-in authentication or authorization.
-- Metadata is in memory and rebuilt from model directories at startup.
-- ZIP extraction should be reviewed before accepting untrusted uploads.
-- Uploaded file payload size is enforced by checking the uploaded `model_file` stream against `MAX_MODEL_FILE_SIZE`.
-- Multiple Gunicorn workers would each have independent model metadata and cache state.
+## 배포 계약
+
+- 공식 컨테이너는 `tensorflow-cpu` 기반 CPU 전용 런타임입니다.
+- 컨테이너는 Gunicorn worker 1개로 실행합니다.
+- 컨테이너 포트는 `5000`입니다.
+- Compose의 기본 호스트 포트는 `12021`입니다.
+- Compose는 기존 호스트 `./data`를 컨테이너 `/app/data`에 연결합니다. 기본 모델 디렉터리는 `data/model_`이며 런타임 UID/GID는 10001:10001입니다.
+- 여러 worker/replica 간에는 메타데이터, 캐시, 락을 공유하지 않습니다.

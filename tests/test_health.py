@@ -1,4 +1,4 @@
 def test_health_endpoint(client):
-    response = client.get('/health')
+    response = client.get("/health")
     assert response.status_code == 200
-    assert response.json == {'data': {'status': 'healthy'}}
+    assert response.json == {"data": {"status": "healthy"}}

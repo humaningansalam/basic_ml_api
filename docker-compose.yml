@@ -1,19 +1,27 @@
+name: basic_ml_api
+
 services:
   basic_ml_api:
-      build:
-        context: .
-        args:
-          VERSION: ${VERSION:-dev}
-        tags:
-          - "basic_ml_api:${VERSION:-dev}"
-      image: basic_ml_api:${VERSION:-dev}
-      container_name: basic_ml_api
-      restart: unless-stopped
-      volumes:
-        - ./data:/usr/src/app/data
-      ports:
-        - 12021:5000
-      env_file:
-        - path: .env
-          required: false
-
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: basic_ml_api:${VERSION:-dev}
+    container_name: basic_ml_api
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${HOST_PORT:-12021}:5000"
+    volumes:
+      - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
