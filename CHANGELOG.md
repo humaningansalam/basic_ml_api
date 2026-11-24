@@ -20,7 +20,7 @@ All notable changes to Basic ML API are documented in this file.
 - Split documentation ownership between usage, external contracts, and internal architecture.
 - Replaced broad generated ignore rules and duplicated automation with project-specific configuration.
 - Pinned the Git-based monitoring dependency to a commit and removed unused direct dependencies.
-- Switched the CPU-only container runtime from the general TensorFlow distribution to `tensorflow-cpu`.
+- Uses `tensorflow-cpu` on Linux x86-64 and `tensorflow` on ARM64 to retain native CPU-only deployment compatibility.
 - Kept the existing Compose service name and host model directory; the deployment prepares ownership for the non-root runtime without moving model data.
 
 ### Fixed

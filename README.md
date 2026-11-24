@@ -123,7 +123,7 @@ docker compose exec -T basic_ml_api python -c \
 - 모델 메타데이터와 캐시는 프로세스 로컬 상태입니다. 기본 Gunicorn 설정은 **worker 1개**이며, 여러 worker 또는 여러 replica를 쓰려면 공유 메타데이터·캐시·락 설계가 먼저 필요합니다.
 - 시작 시 모델 디렉터리를 다시 스캔하므로 마지막 사용 시각은 영속화되지 않습니다.
 - 업로드 API는 인증을 제공하지 않습니다. 외부 노출 시 별도의 인증 프록시와 업로드 권한 통제가 필요합니다.
-- 공식 Docker 이미지는 `tensorflow-cpu` 기반 CPU 전용 런타임입니다. GPU 실행은 별도 이미지와 운영 계약이 필요합니다.
+- 공식 Docker 이미지는 CPU 전용 런타임입니다(Linux x86-64: `tensorflow-cpu`, ARM64: `tensorflow`). GPU 실행은 별도 이미지와 운영 계약이 필요합니다.
 - TensorFlow/Keras 모델은 신뢰 경계 안에서만 취급합니다. `safe_mode=True`는 샌드박스를 의미하지 않습니다.
 
 ## 라이선스

@@ -10,11 +10,16 @@ dependencies = [
     "gunicorn>=22,<26",
     "his-monitoring",
     "prometheus-client>=0.23.1,<1",
-    "tensorflow-cpu==2.16.*",
+    "tensorflow-cpu==2.16.*; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "tensorflow==2.16.*; sys_platform != 'linux' or platform_machine != 'x86_64'",
 ]
 
 [tool.uv]
 package = false
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
 
 [tool.uv.sources]
 his-monitoring = { git = "https://github.com/humaningansalam/his-monitoring.git", rev = "449a45fd2884e58cefc984ff2b15660d042432ca" }
