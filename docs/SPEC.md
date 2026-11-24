@@ -206,7 +206,7 @@ NumPy 배열, TensorFlow tensor, 목록, tuple, 문자열 키를 가진 객체�
 
 ## 배포 계약
 
-- 공식 컨테이너는 `tensorflow-cpu` 기반 CPU 전용 런타임입니다.
+- 공식 컨테이너는 CPU 전용 런타임입니다(Linux x86-64: `tensorflow-cpu`, ARM64: `tensorflow`).
 - 컨테이너는 Gunicorn worker 1개로 실행합니다.
 - 컨테이너 포트는 `5000`입니다.
 - Compose의 기본 호스트 포트는 `12021`입니다.
