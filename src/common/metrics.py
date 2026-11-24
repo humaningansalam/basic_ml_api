@@ -1,48 +1,56 @@
-#common/metrics
+import threading
+from typing import ClassVar
+
 from his_mon import BaseMetrics
 from prometheus_client import Counter, Gauge
-import threading
 
 from src.common.errors import ErrorCode
 
-class PMetrics(BaseMetrics):
-    _lock = threading.Lock()
-    _instance = None
 
-    def __init__(self):
+class ServiceMetrics(BaseMetrics):
+    """Process-local Prometheus metrics used by the API and model manager."""
+
+    _instance: ClassVar["ServiceMetrics | None"] = None
+    _instance_lock: ClassVar[threading.Lock] = threading.Lock()
+
+    def __init__(self) -> None:
         super().__init__(app_name="ml_api")
-        
-        self.model_cache_usage = Gauge('model_cache_usage', 'Number of models currently cached')
-        self.predictions_completed = Counter('predictions_completed', 'Number of completed predictions')
-        self.cache_hits = Counter('cache_hits', 'Number of cache hits')
-        self.cache_misses = Counter('cache_misses', 'Number of cache misses')
+        self._loaded_model_count = Gauge(
+            "model_cache_usage",
+            "Number of models currently cached",
+        )
+        self._completed_predictions = Counter(
+            "predictions_completed",
+            "Number of completed predictions",
+        )
+        self._cache_hits = Counter("cache_hits", "Number of cache hits")
+        self._cache_misses = Counter("cache_misses", "Number of cache misses")
+
         # A labeled counter has no exported series until its first child exists.
         self.error_count.labels(type=ErrorCode.INTERNAL_ERROR.value)
 
     @classmethod
-    def get_instance(cls):
-        """싱글톤 인스턴스 반환"""
-        with cls._lock:
+    def instance(cls) -> "ServiceMetrics":
+        with cls._instance_lock:
             if cls._instance is None:
-                cls._instance = PMetrics()
-        return cls._instance
+                cls._instance = cls()
+            return cls._instance
 
-    # Metric 메서드들
-    def increment_error_count(self, error_code: ErrorCode):
+    def increment_error_count(self, error_code: ErrorCode) -> None:
         self.error_count.labels(type=error_code.value).inc()
 
-    def increment_predictions_completed(self):
-        self.predictions_completed.inc()
+    def increment_predictions_completed(self) -> None:
+        self._completed_predictions.inc()
 
-    def increment_cache_hit(self):
-        self.cache_hits.inc()
+    def increment_cache_hit(self) -> None:
+        self._cache_hits.inc()
 
-    def increment_cache_miss(self):
-        self.cache_misses.inc()
+    def increment_cache_miss(self) -> None:
+        self._cache_misses.inc()
 
-    def set_model_cache_usage(self, value):
-        self.model_cache_usage.set(value)
+    def set_loaded_model_count(self, value: int) -> None:
+        self._loaded_model_count.set(value)
 
-def get_metrics():
-    """메트릭스 인스턴스 획득 헬퍼 함수"""
-    return PMetrics.get_instance()
+
+def get_metrics() -> ServiceMetrics:
+    return ServiceMetrics.instance()
